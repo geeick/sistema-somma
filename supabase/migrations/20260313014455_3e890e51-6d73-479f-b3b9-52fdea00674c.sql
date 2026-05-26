@@ -1,0 +1,1 @@
+ALTER TABLE public.campaigns ADD COLUMN example_urls jsonb DEFAULT '{}'::jsonb;
