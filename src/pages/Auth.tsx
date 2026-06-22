@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { authClient, getNeonUser } from "@/lib/auth";
+import apiClient from "@/integrations/apiClient";
+import { setAccessToken } from "@/integrations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,21 +26,11 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    getNeonUser().then((user) => {
+      if (user) {
         navigate("/dashboard");
       }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        navigate("/dashboard");
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    }).catch(() => undefined);
   }, [navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -47,28 +39,33 @@ const Auth = () => {
     try {
       const validated = authSchema.parse({ email, password, fullName });
       setIsLoading(true);
-
-      const { error } = await supabase.auth.signUp({
+      const result = await authClient.signUp.email({
         email: validated.email,
         password: validated.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: validated.fullName,
-          },
-        },
+        name: validated.fullName || validated.email.split('@')[0] || 'User',
       });
 
-      if (error) {
-        if (error.message.includes("already registered")) {
-          toast.error("This email is already registered. Please sign in instead.");
-        } else {
-          toast.error(error.message);
-        }
+      if (result.error) {
+        toast.error(result.error.message || 'Signup failed');
+        console.error('Signup failed payload', result.error);
         return;
       }
 
-      toast.success("Account created successfully! Welcome to CreatorPay.");
+      // If the auth result returned an access token, store it for the
+      // server-side compatibility shim so requests include a Bearer token.
+      const token = result?.data?.session?.access_token ?? result?.access_token ?? result?.data?.access_token;
+      if (token) {
+        try { setAccessToken(token); } catch {};
+      }
+
+      // Trigger a protected request to the server so the server's verifyToken
+      // middleware creates the `profiles` row for this user.
+      try {
+        await apiClient.pages.list().catch(() => undefined);
+      } catch (_) {}
+
+      toast.success('Account created successfully! Redirecting...');
+      navigate('/dashboard');
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -87,17 +84,27 @@ const Auth = () => {
       const validated = authSchema.parse({ email, password });
       setIsLoading(true);
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const result = await authClient.signIn.email({
         email: validated.email,
         password: validated.password,
       });
 
-      if (error) {
-        toast.error(error.message);
+      if (result.error) {
+        toast.error(result.error.message);
         return;
       }
 
+      // Store token if returned by adapter
+      const token = result?.data?.session?.access_token ?? result?.access_token ?? result?.data?.access_token;
+      if (token) {
+        try { setAccessToken(token); } catch {}
+      }
+
+      // Trigger protected request to ensure server-side profile exists
+      try { await apiClient.pages.list().catch(() => undefined); } catch {}
+
       toast.success("Signed in successfully!");
+      navigate('/dashboard');
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);

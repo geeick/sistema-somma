@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Instagram, Play, Youtube } from "lucide-react";
 import { SheetMetric, findMetricForUrl, computePayoutFromPlays } from "@/hooks/useSheetMetrics";
@@ -46,17 +46,12 @@ export const VideoList = ({ userId, sheetMetrics = [], onMetricsRefresh }: Video
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchVideos = async () => {
-    const { data, error } = await supabase
-      .from("submissions")
-      .select("*")
-      .eq("user_id", userId)
-      .neq("status", "deleted")
-      .order("uploaded_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching videos:", error);
-    } else {
-      setVideos(data || []);
+    try {
+      const data = await apiClient.tables.list('submissions', { user_id: userId });
+      const vids = (data || []).filter((v: any) => v.status !== 'deleted').sort((a: any, b: any) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
+      setVideos(vids);
+    } catch (err) {
+      console.error('Error fetching videos:', err);
     }
     setIsLoading(false);
   };
@@ -66,26 +61,8 @@ export const VideoList = ({ userId, sheetMetrics = [], onMetricsRefresh }: Video
 
     fetchVideos();
 
-    const channel = supabase
-      .channel("videos-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "submissions",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          fetchVideos();
-          onMetricsRefresh?.();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // realtime not available in API shim — consider polling or SSE
+    return undefined;
   }, [userId]);
 
   if (isLoading) {

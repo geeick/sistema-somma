@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
+import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { DollarSign, Wallet as WalletIcon, TrendingUp } from "lucide-react";
-import { User } from "@supabase/supabase-js";
 
 interface Profile {
   total_earnings: number | null;
@@ -27,7 +27,7 @@ interface Withdrawal {
 
 const Wallet = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NeonUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,38 +36,30 @@ const Wallet = () => {
   const [pixKey, setPixKey] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate("/auth");
+    getNeonUser().then((currentUser) => {
+      if (!currentUser) {
+        navigate('/auth');
         return;
       }
-      setUser(session.user);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      }
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+      setUser(currentUser);
+    }).catch(() => navigate('/auth'));
   }, [navigate]);
 
   useEffect(() => {
     if (!user) return;
 
     const fetchData = async () => {
-      const [profileResult, withdrawalsResult] = await Promise.all([
-        supabase.from("profiles").select("total_earnings, pix_key").eq("id", user.id).single(),
-        supabase.from("withdrawals").select("*").eq("user_id", user.id).order("requested_at", { ascending: false })
-      ]);
-
-      if (profileResult.data) {
-        setProfile(profileResult.data);
-        setPixKey(profileResult.data.pix_key || "");
+      try {
+        const profileData = await apiClient.wallet.profile();
+        const withdrawalsData = await apiClient.wallet.withdrawals();
+        if (profileData) {
+          setProfile(profileData);
+          setPixKey(profileData.pix_key || '');
+        }
+        if (withdrawalsData) setWithdrawals(withdrawalsData);
+      } catch (err) {
+        console.error(err);
       }
-      if (withdrawalsResult.data) setWithdrawals(withdrawalsResult.data);
       setIsLoading(false);
     };
 
@@ -97,22 +89,15 @@ const Wallet = () => {
       return;
     }
 
-    const { error } = await supabase.from("withdrawals").insert({
-      user_id: user.id,
-      amount: amountNum,
-      pix_key: pixKey,
-      status: "requested"
-    });
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Success", description: "Withdrawal requested successfully! We'll process it soon." });
+    try {
+      await apiClient.wallet.requestWithdrawal({ amount: amountNum, pix_key: pixKey });
+      toast({ title: 'Success', description: "Withdrawal requested successfully! We'll process it soon." });
       setIsDialogOpen(false);
-      setAmount("");
-      
-      const { data } = await supabase.from("withdrawals").select("*").eq("user_id", user.id).order("requested_at", { ascending: false });
+      setAmount('');
+      const data = await apiClient.wallet.withdrawals();
       if (data) setWithdrawals(data);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || String(err), variant: 'destructive' });
     }
   };
 

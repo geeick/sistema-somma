@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Instagram, Play, Youtube, Calendar, DollarSign, Target } from "lucide-react";
-import { User } from "@supabase/supabase-js";
 import { useUserRole } from "@/hooks/useUserRole";
 
 interface Campaign {
@@ -24,6 +23,36 @@ interface Campaign {
   status: string;
 }
 
+function normalizeList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === "string");
+      }
+    } catch {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function normalizeCampaign(campaign: any): Campaign {
+  return {
+    ...campaign,
+    required_tags: normalizeList(campaign.required_tags),
+    platforms: normalizeList(campaign.platforms),
+  };
+}
+
 const platformIcons = {
   instagram: Instagram,
   tiktok: Play,
@@ -33,49 +62,24 @@ const platformIcons = {
 const Campaigns = () => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
-  const [user, setUser] = useState<User | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-      setUser(session.user);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-      setUser(session.user);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  useEffect(() => {
-    if (!user) return;
-
     const fetchCampaigns = async () => {
-      const { data, error } = await supabase
-        .from("campaigns")
-        .select("*")
-        .eq("status", "active")
-        .order("start_date", { ascending: false });
-
-      if (!error && data) {
-        setCampaigns(data);
+      try {
+        const data = await apiClient.campaigns.active();
+        setCampaigns(Array.isArray(data) ? data.map(normalizeCampaign) : []);
+      } catch (err) {
+        console.error("Error fetching campaigns:", err);
+        setCampaigns([]);
       }
       setIsLoading(false);
     };
 
     fetchCampaigns();
-  }, [user]);
+  }, []);
 
   const filteredCampaigns = campaigns.filter(campaign =>
     campaign.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,7 +140,7 @@ const Campaigns = () => {
                         )}
                       </div>
                       <div className="flex gap-2 ml-4">
-                        {campaign.platforms?.map((platform) => {
+                        {campaign.platforms.map((platform) => {
                           const Icon = platformIcons[platform as keyof typeof platformIcons];
                           return Icon ? (
                             <Badge key={platform} variant="outline" className="gap-1">

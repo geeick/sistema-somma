@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,21 +38,12 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
 
   useEffect(() => {
     const fetchCampaigns = async () => {
-      const { data, error } = await supabase
-        .from("campaigns")
-        .select("id, title, status, audio_url, end_date")
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching campaigns:", error);
-        toast.error("Failed to load campaigns");
-      } else {
-        // Filter out campaigns past their end date (client-side check)
-        const activeCampaigns = (data || []).filter(campaign => 
-          new Date(campaign.end_date) >= new Date()
-        );
-        setCampaigns(activeCampaigns);
+      try {
+        const data = await apiClient.campaigns.active();
+        setCampaigns(data || []);
+      } catch (err) {
+        console.error('Error fetching campaigns:', err);
+        toast.error('Failed to load campaigns');
       }
     };
 
@@ -97,40 +88,17 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
         audioVerified = true;
       }
       
-      const { error: insertError } = await supabase.from("submissions").insert({
+      const inserted = await apiClient.tables.create('submissions', {
         user_id: userId,
         campaign_id: validated.campaignId,
         title: `${campaign?.title || 'Campaign'} - Submission`,
         platform: validated.platform,
         post_url: validated.postUrl,
-        status: "approved",
+        status: 'approved',
         audio_verified: audioVerified,
       });
 
-      if (insertError) throw insertError;
-
-      // Send data to Google Sheets via edge function
-      try {
-        const { data: sheetsResult, error: sheetsError } = await supabase.functions.invoke("send-to-sheets", {
-          body: {
-            postLink: validated.postUrl,
-            campaignName: campaign?.title || "",
-            platform: validated.platform,
-          },
-        });
-
-        if (sheetsError) {
-          throw sheetsError;
-        }
-
-        if (sheetsResult?.status === "error") {
-          console.error("Google Sheets API returned error:", sheetsResult);
-          toast.warning("Conteúdo enviado, mas não foi possível registrar na planilha.");
-        }
-      } catch (sheetError) {
-        console.error("Failed to send data to Google Sheets:", sheetError);
-        toast.warning("Conteúdo enviado, mas houve erro ao enviar para a planilha.");
-      }
+      if (!inserted) throw new Error('Insert failed');
 
       toast.success("Submission uploaded successfully!");
       

@@ -36,22 +36,19 @@ export function useSheetMetrics() {
 
   const fetchSheetMetrics = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("fetch-sheets-metrics");
-      if (error) {
-        console.error("Error fetching sheet metrics:", error);
-        return;
-      }
-      if (data?.status === "success" && Array.isArray(data.data)) {
-        const metrics: SheetMetric[] = data.data.map((row: any) => ({
-          url: String(row.url || row.postLink || row.link || row.URL || "").trim(),
-          username: String(row.username || row.userName || row.UserName || row.USERNAME || "").trim(),
+      const res = await fetch((import.meta.env.VITE_API_BASE || '') + '/api/sheets/metrics');
+      const json = await res.json();
+      if (json?.status === 'success' && Array.isArray(json.data)) {
+        const metrics: SheetMetric[] = json.data.map((row: any) => ({
+          url: String(row.url || row.postLink || row.link || row.URL || '').trim(),
+          username: String(row.username || row.userName || row.UserName || row.USERNAME || '').trim(),
           likes: Number(row.likes || row.Likes || row.LIKES || 0),
           plays: Number(row.plays || row.Plays || row.PLAYS || row.views || row.Views || 0),
         }));
         setSheetMetrics(metrics);
       }
     } catch (err) {
-      console.error("Failed to fetch sheet metrics:", err);
+      console.error('Failed to fetch sheet metrics:', err);
     } finally {
       setIsLoading(false);
     }

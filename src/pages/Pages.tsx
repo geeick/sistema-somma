@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
+import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Instagram, Play, Youtube, Plus, Trash2 } from "lucide-react";
-import { User } from "@supabase/supabase-js";
 import type { LucideIcon } from "lucide-react";
 
 interface Page {
@@ -36,7 +36,7 @@ const availableTags = [
 
 const Pages = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NeonUser | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -56,36 +56,24 @@ const Pages = () => {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate("/auth");
+    getNeonUser().then((currentUser) => {
+      if (!currentUser) {
+        navigate('/auth');
         return;
       }
-      setUser(session.user);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      }
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+      setUser(currentUser);
+    }).catch(() => navigate('/auth'));
   }, [navigate]);
 
   useEffect(() => {
     if (!user) return;
 
     const fetchPages = async () => {
-      const { data, error } = await supabase
-        .from("pages")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        setPages(data);
+      try {
+        const data = await apiClient.pages.list();
+        setPages(data || []);
+      } catch (err) {
+        console.error(err);
       }
       setIsLoading(false);
     };
@@ -105,51 +93,20 @@ const Pages = () => {
     }
 
     // Insert the page
-    const { data: newPage, error } = await supabase.from("pages").insert([{
-      user_id: user.id,
-      platform: platform as "instagram" | "tiktok" | "youtube_shorts",
-      handle,
-      url,
-      follower_count: parseInt(followerCount),
-      tags: selectedTags,
-    }]).select().single();
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    try {
+      const newPage = await apiClient.pages.create({
+        user_id: user?.id,
+        platform: platform as 'instagram' | 'tiktok' | 'youtube_shorts',
+        handle,
+        url,
+        follower_count: parseInt(followerCount),
+        tags: selectedTags,
+      });
+      // tag linking should be handled by server-side logic if required
+      if (!newPage) throw new Error('Failed to create page');
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || String(err), variant: 'destructive' });
       return;
-    }
-
-    // Find matching tags in the tags table and link them via page_tags
-    const { data: matchingTags } = await supabase
-      .from("tags")
-      .select("id, name, slug, synonyms")
-      .eq("active", true);
-
-    if (matchingTags && newPage) {
-      const pageTagsToInsert = [];
-      
-      for (const selectedTag of selectedTags) {
-        const normalizedSelectedTag = selectedTag.toLowerCase();
-        
-        // Find matching tag by name, slug, or synonyms
-        const matchedTag = matchingTags.find(tag => 
-          tag.name.toLowerCase() === normalizedSelectedTag ||
-          tag.slug.toLowerCase() === normalizedSelectedTag ||
-          (tag.synonyms && tag.synonyms.some(syn => syn.toLowerCase() === normalizedSelectedTag))
-        );
-
-        if (matchedTag) {
-          pageTagsToInsert.push({
-            page_id: newPage.id,
-            tag_id: matchedTag.id
-          });
-        }
-      }
-
-      // Insert into page_tags junction table
-      if (pageTagsToInsert.length > 0) {
-        await supabase.from("page_tags").insert(pageTagsToInsert);
-      }
     }
 
     toast({ title: "Success", description: "Page added successfully!" });
@@ -160,18 +117,21 @@ const Pages = () => {
     setFollowerCount("");
     setSelectedTags([]);
     
-    const { data } = await supabase.from("pages").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    if (data) setPages(data);
+    try {
+      const data = await apiClient.pages.list();
+      if (data) setPages(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleDeletePage = async (pageId: string) => {
-    const { error } = await supabase.from("pages").delete().eq("id", pageId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await apiClient.pages.remove(pageId);
       toast({ title: "Success", description: "Page deleted successfully!" });
       setPages(pages.filter(p => p.id !== pageId));
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || String(err), variant: "destructive" });
     }
   };
 

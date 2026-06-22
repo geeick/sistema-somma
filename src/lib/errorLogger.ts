@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import apiClient from '@/integrations/apiClient';
 
 export interface ErrorLog {
   error_code: string;
@@ -12,24 +12,16 @@ export interface ErrorLog {
 
 export async function logError(errorData: ErrorLog) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    const { error } = await supabase
-      .from('error_logs')
-      .insert({
-        user_id: user?.id,
-        error_code: errorData.error_code,
-        error_message: errorData.error_message,
-        error_stack: errorData.error_stack,
-        page_url: errorData.page_url || window.location.href,
-        user_agent: errorData.user_agent || navigator.userAgent,
-        severity: errorData.severity || 'error',
-        metadata: errorData.metadata || {},
-      });
-
-    if (error) {
-      console.error('Failed to log error:', error);
-    }
+    // Forward to API error logging endpoint. The server will associate user if token present.
+    await apiClient.logError({
+      error_code: errorData.error_code,
+      error_message: errorData.error_message,
+      error_stack: errorData.error_stack,
+      page_url: errorData.page_url || window.location.href,
+      user_agent: errorData.user_agent || navigator.userAgent,
+      severity: errorData.severity || 'error',
+      metadata: errorData.metadata || {},
+    });
   } catch (err) {
     console.error('Error logging system failed:', err);
   }

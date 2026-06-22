@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, Video } from "lucide-react";
 import { SheetMetric, findMetricForUrl, computePayoutFromPlays } from "@/hooks/useSheetMetrics";
@@ -20,35 +20,17 @@ export const StatsCards = ({ userId, sheetMetrics = [] }: StatsCardsProps) => {
 
   useEffect(() => {
     if (!userId) return;
-
     const fetchSubmissions = async () => {
-      const { data } = await supabase
-        .from("submissions")
-        .select("payment_amount, status, post_url")
-        .eq("user_id", userId);
-
-      if (data) setSubmissions(data);
+      try {
+        const data = await apiClient.tables.list('submissions', { user_id: userId });
+        setSubmissions(data || []);
+      } catch (err) {
+        console.error(err);
+      }
     };
 
     fetchSubmissions();
-
-    const channel = supabase
-      .channel("stats-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "submissions",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => fetchSubmissions()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // Note: realtime subscriptions are not implemented in the API shim; consider polling or server-sent events.
   }, [userId]);
 
   const activeSubmissions = submissions.filter((v) => v.status !== "deleted");

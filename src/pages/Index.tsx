@@ -4,25 +4,21 @@ import { Navbar } from "@/components/Navbar";
 import { Link, Navigate } from "react-router-dom";
 import { DollarSign, Upload, CheckCircle, TrendingUp } from "lucide-react";
 import heroBackground from "@/assets/hero-background.jpg";
-import { supabase } from "@/integrations/supabase/client";
+import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { useEffect, useState } from "react";
-import { User } from "@supabase/supabase-js";
 
 const Index = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NeonUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    getNeonUser().then((currentUser) => {
+      setUser(currentUser);
+      setIsLoading(false);
+    }).catch(() => {
+      setUser(null);
       setIsLoading(false);
     });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   if (isLoading) {

@@ -1,33 +1,22 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { getNeonUser, signOutNeon, type NeonUser } from "@/lib/auth";
 import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
-import { User } from "@supabase/supabase-js";
 import sommaLogo from "@/assets/somma-logo.png";
 import { useUserRole } from "@/hooks/useUserRole";
 
 export const Navbar = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NeonUser | null>(null);
   const { isAdmin } = useUserRole();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    getNeonUser().then(setUser).catch(() => setUser(null));
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutNeon();
     navigate("/");
   };
 

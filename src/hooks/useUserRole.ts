@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getNeonUser } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 
 type UserRole = 'admin' | 'finance' | 'creator';
@@ -10,7 +11,7 @@ export function useUserRole() {
   useEffect(() => {
     async function fetchUserRole() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getNeonUser();
         
         if (!user) {
           setRole(null);

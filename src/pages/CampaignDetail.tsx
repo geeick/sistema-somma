@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getNeonSession, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Instagram, Play, Youtube, Calendar, DollarSign, Target, ExternalLink, Eye, Heart, MessageCircle, Share2, TrendingUp } from "lucide-react";
-import { User } from "@supabase/supabase-js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -78,7 +78,7 @@ const CampaignDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NeonUser | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [hasJoined, setHasJoined] = useState(false);
@@ -94,22 +94,13 @@ const CampaignDetail = () => {
   });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+    getNeonSession().then(({ user }) => {
+      if (!user) {
         navigate("/auth");
         return;
       }
-      setUser(session.user);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      }
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+      setUser(user);
+    }).catch(() => navigate("/auth"));
   }, [navigate]);
 
   useEffect(() => {

@@ -1,41 +1,31 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { getNeonSession, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
 import { UploadVideo } from "@/components/UploadVideo";
 import { VideoList } from "@/components/VideoList";
 import { StatsCards } from "@/components/StatsCards";
 import { WalletDisplay } from "@/components/WalletDisplay";
 import { useSheetMetrics } from "@/hooks/useSheetMetrics";
-import { User } from "@supabase/supabase-js";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NeonUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { sheetMetrics, refetch: refetchMetrics } = useSheetMetrics();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+    getNeonSession().then(({ user }) => {
+      if (!user) {
         navigate("/auth");
       } else {
-        setUser(session.user);
+        setUser(user);
       }
       setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
+      navigate("/auth");
     });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, [navigate]);
 
   if (isLoading) {

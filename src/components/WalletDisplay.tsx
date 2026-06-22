@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import apiClient from '@/integrations/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Wallet, TrendingUp } from 'lucide-react';
 
@@ -20,17 +20,10 @@ export function WalletDisplay({ userId }: WalletDisplayProps) {
 
   const fetchBalance = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('balance_total, balance_available')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-
+      const profile = await apiClient.wallet.profile();
       setBalance({
-        total: data?.balance_total || 0,
-        available: data?.balance_available || 0,
+        total: profile?.balance_total || profile?.total_earnings || 0,
+        available: profile?.balance_available || 0,
       });
     } catch (error) {
       console.error('Error fetching balance:', error);
