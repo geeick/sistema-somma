@@ -1,46 +1,73 @@
-import { useState, useEffect } from 'react';
-import { getNeonUser } from '@/lib/auth';
-import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useState } from "react";
+import { getNeonAccessToken } from "@/lib/auth";
 
-type UserRole = 'admin' | 'finance' | 'creator';
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-export function useUserRole() {
-  const [role, setRole] = useState<UserRole | null>(null);
+type UserRoleState = {
+  isAdmin: boolean;
+  isLoading: boolean;
+  role: string | null;
+};
+
+export function useUserRole(): UserRoleState {
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchUserRole() {
+    let cancelled = false;
+
+    const checkRole = async () => {
       try {
-        const user = await getNeonUser();
-        
-        if (!user) {
-          setRole(null);
-          setIsLoading(false);
+        const token = await getNeonAccessToken();
+
+        if (!token) {
+          if (!cancelled) {
+            setIsAdmin(false);
+            setRole(null);
+          }
           return;
         }
 
-        const { data, error } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single();
+        const res = await fetch(`${API_BASE}/api/admin/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-        if (error) {
-          console.error('Error fetching user role:', error);
-          setRole('creator'); // Default to creator
-        } else {
-          setRole(data.role as UserRole);
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          if (!cancelled) {
+            setIsAdmin(false);
+            setRole(null);
+          }
+          return;
         }
-      } catch (error) {
-        console.error('Error in fetchUserRole:', error);
-        setRole('creator');
-      } finally {
-        setIsLoading(false);
-      }
-    }
 
-    fetchUserRole();
+        if (!cancelled) {
+          setIsAdmin(Boolean(json.data?.isAdmin));
+          setRole(json.data?.role || null);
+        }
+      } catch (err) {
+        console.error("Failed to check user role:", err);
+        if (!cancelled) {
+          setIsAdmin(false);
+          setRole(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    checkRole();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  return { role, isLoading, isAdmin: role === 'admin', isFinance: role === 'finance', isCreator: role === 'creator' };
+  return { isAdmin, isLoading, role };
 }

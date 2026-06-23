@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const jwksRsa = require('jwks-rsa');
+const crypto = require('crypto');
 const { Pool } = require('pg');
 
 // Load the project's root .env.local when running from the server folder.
@@ -18,12 +18,114 @@ const PORT = process.env.PORT || 4000;
 // Postgres pool
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// JWKS client - expects NEON_AUTH_JWKS_URI env var
-const jwksUri = process.env.NEON_AUTH_JWKS_URI; // e.g. https://auth.neon.tech/.well-known/jwks.json
-let jwksClient = null;
-if (jwksUri) {
-  jwksClient = jwksRsa({ jwksUri });
+// Instagram OAuth/security helpers
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:8080';
+
+function getStateSecret() {
+  const secret = process.env.OAUTH_STATE_SECRET || process.env.TOKEN_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new Error('Missing OAUTH_STATE_SECRET or TOKEN_ENCRYPTION_KEY in .env.local');
+  }
+  return secret;
 }
+
+function getTokenEncryptionKey() {
+  const raw = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!raw) {
+    throw new Error('Missing TOKEN_ENCRYPTION_KEY in .env.local');
+  }
+
+  const key = Buffer.from(raw, 'base64');
+  if (key.length !== 32) {
+    throw new Error('TOKEN_ENCRYPTION_KEY must be a base64 encoded 32-byte key. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
+  }
+
+  return key;
+}
+
+function encryptToken(token) {
+  const key = getTokenEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(token, 'utf8'),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+
+  return [
+    iv.toString('base64url'),
+    tag.toString('base64url'),
+    encrypted.toString('base64url'),
+  ].join('.');
+}
+
+function signStateBody(body) {
+  return crypto
+    .createHmac('sha256', getStateSecret())
+    .update(body)
+    .digest('base64url');
+}
+
+function createOAuthState(userId) {
+  const body = Buffer.from(JSON.stringify({
+    userId,
+    nonce: crypto.randomBytes(16).toString('hex'),
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  })).toString('base64url');
+
+  return `${body}.${signStateBody(body)}`;
+}
+
+function parseAndVerifyOAuthState(state) {
+  const [body, signature] = String(state || '').split('.');
+  if (!body || !signature) {
+    throw new Error('Invalid OAuth state');
+  }
+
+  const expected = signStateBody(body);
+  const expectedBuffer = Buffer.from(expected);
+  const receivedBuffer = Buffer.from(signature);
+
+  if (
+    expectedBuffer.length !== receivedBuffer.length ||
+    !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+  ) {
+    throw new Error('Invalid OAuth state signature');
+  }
+
+  const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+
+  if (!parsed.userId || !parsed.expiresAt || Date.now() > parsed.expiresAt) {
+    throw new Error('Expired OAuth state');
+  }
+
+  return parsed;
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (_err) {
+    return { message: text };
+  }
+}
+
+
+// JWKS client - expects NEON_AUTH_JWKS_URI env var
+const jwksUri = process.env.NEON_AUTH_JWKS_URI;
+let neonJwks = null;
+
+async function getNeonJwks() {
+  if (!jwksUri) return null;
+  if (!neonJwks) {
+    const { createRemoteJWKSet } = await import('jose');
+    neonJwks = createRemoteJWKSet(new URL(jwksUri));
+  }
+  return neonJwks;
+}
+
 const DEV_JWT_SECRET = process.env.DEV_JWT_SECRET;
 
 async function verifyToken(req, res, next) {
@@ -35,18 +137,14 @@ async function verifyToken(req, res, next) {
 
   try {
     const decodedHeader = jwt.decode(token, { complete: true });
-    // If JWKS client is configured and the token has a key id, use RS256.
-    if (jwksClient && decodedHeader?.header?.kid) {
-      const kid = decodedHeader && decodedHeader.header && decodedHeader.header.kid;
-      const key = await new Promise((resolve, reject) => {
-        jwksClient.getSigningKey(kid, (err, key) => {
-          if (err) return reject(err);
-          resolve(key.getPublicKey());
-        });
-      });
+      // If JWKS client is configured and the token has a key id, use RS256.
+      const jwks = await getNeonJwks();
 
-      const payload = jwt.verify(token, key, { algorithms: ['RS256'] });
-      req.user = payload;
+      if (jwks) {
+        const { jwtVerify } = await import('jose');
+        const { payload } = await jwtVerify(token, jwks);
+        req.user = payload;
+
       try {
         // ensure a profiles row exists for this auth user id
         const userId = req.user.sub;
@@ -85,6 +183,77 @@ async function verifyToken(req, res, next) {
   }
 }
 
+
+async function requireAdmin(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Missing authenticated user" });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT role
+      FROM neon_auth."user"
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (result.rows[0]?.role !== "admin") {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    next();
+  } catch (err) {
+    console.error("Admin check failed", err);
+    return res.status(500).json({ error: "Admin check failed" });
+  }
+}
+
+function normalizeArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === '') return [];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_err) {
+      return value.split(',').map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function normalizeJsonObject(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch (_err) {
+      return null;
+    }
+  }
+  return null;
+}
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function dateOrNull(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : value;
+}
+
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.get('/api/campaigns/active', async (req, res) => {
@@ -112,16 +281,11 @@ app.get('/api/session', async (req, res) => {
     await new Promise((resolve) => setImmediate(resolve));
     const token = auth.split(' ')[1];
     // If JWKS client is configured, verify RS256 as usual
-    if (jwksClient) {
-      const decodedHeader = jwt.decode(token, { complete: true });
-      const kid = decodedHeader && decodedHeader.header && decodedHeader.header.kid;
-      const key = await new Promise((resolve, reject) => {
-        jwksClient.getSigningKey(kid, (err, key) => {
-          if (err) return reject(err);
-          resolve(key.getPublicKey());
-        });
-      });
-      const payload = jwt.verify(token, key, { algorithms: ['RS256'] });
+    const jwks = await getNeonJwks();
+
+    if (jwks) {
+      const { jwtVerify } = await import('jose');
+      const { payload } = await jwtVerify(token, jwks);
       return res.json({ data: { session: { access_token: token, user: payload } } });
     }
 
@@ -356,6 +520,769 @@ app.post('/auth/signup', async (req, res) => {
     return res.status(500).json({ error: 'Signup failed', details: String(err && err.message ? err.message : err) });
   }
 });
+
+
+// Instagram OAuth routes.
+// These routes verify page ownership by making the user authorize Instagram,
+// then saving only server-side encrypted tokens. The browser never receives
+// the Instagram access token.
+app.get('/api/integrations/instagram/start', verifyToken, async (req, res) => {
+  try {
+    const clientId = process.env.INSTAGRAM_CLIENT_ID;
+    const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
+
+    if (!clientId || !redirectUri) {
+      return res.status(500).json({
+        error: 'Instagram OAuth is not configured. Set INSTAGRAM_CLIENT_ID and INSTAGRAM_REDIRECT_URI in .env.local.',
+      });
+    }
+
+    const authUrl = process.env.INSTAGRAM_AUTH_URL || 'https://www.instagram.com/oauth/authorize';
+    const scope = process.env.INSTAGRAM_SCOPES || 'instagram_business_basic';
+    const state = createOAuthState(req.user.sub);
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope,
+      state,
+    });
+
+    res.json({ url: `${authUrl}?${params.toString()}` });
+  } catch (err) {
+    console.error('Instagram OAuth start error', err);
+    res.status(500).json({ error: 'Failed to start Instagram connection' });
+  }
+});
+
+app.get('/api/integrations/instagram/callback', async (req, res) => {
+  const { code, state, error, error_reason, error_description } = req.query;
+
+  if (error) {
+    console.error('Instagram OAuth denied', { error, error_reason, error_description });
+    return res.redirect(`${FRONTEND_BASE_URL}/pages?instagram=denied`);
+  }
+
+  if (!code || !state) {
+    return res.status(400).send('Missing Instagram OAuth code or state');
+  }
+
+  try {
+    const parsedState = parseAndVerifyOAuthState(state);
+    const userId = parsedState.userId;
+
+    const clientId = process.env.INSTAGRAM_CLIENT_ID;
+    const clientSecret = process.env.INSTAGRAM_CLIENT_SECRET;
+    const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return res.status(500).send('Instagram OAuth is not configured on the server');
+    }
+
+    const tokenUrl = process.env.INSTAGRAM_TOKEN_URL || 'https://api.instagram.com/oauth/access_token';
+
+    const tokenResponse = await fetch(tokenUrl, {
+      method: 'POST',
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+        code: String(code),
+      }),
+    });
+
+    const tokenJson = await readJsonResponse(tokenResponse);
+
+    if (!tokenResponse.ok || !tokenJson.access_token) {
+      console.error('Instagram token exchange failed', tokenJson);
+      return res.status(400).send('Instagram token exchange failed');
+    }
+
+    const accessToken = tokenJson.access_token;
+    const profileUrl = process.env.INSTAGRAM_PROFILE_URL || 'https://graph.instagram.com/me';
+
+    const profileResponse = await fetch(
+      `https://graph.instagram.com/me?fields=id,username,followers_count&access_token=${encodeURIComponent(accessToken)}`
+    );
+
+    const profileJson = await readJsonResponse(profileResponse);
+
+    if (!profileResponse.ok || !profileJson.id || !profileJson.username) {
+      console.error('Instagram profile fetch failed', profileJson);
+      return res.status(400).send('Instagram profile fetch failed');
+    }
+
+    const handle = `@${profileJson.username}`;
+    const url = `https://www.instagram.com/${profileJson.username}`;
+
+    const pageResult = await pool.query(
+      `
+      INSERT INTO pages(
+        user_id,
+        platform,
+        handle,
+        url,
+        follower_count,
+        tags,
+        external_account_id,
+        verified,
+        verified_at,
+        created_at
+      )
+      VALUES($1, 'instagram', $2, $3, NULL, $4, $5, true, now(), now())
+      ON CONFLICT DO NOTHING
+      RETURNING *
+      `,
+      [userId, handle, url, [], String(profileJson.id)]
+    );
+
+    let page = pageResult.rows[0];
+
+    if (!page) {
+      const existingPageResult = await pool.query(
+        `
+        SELECT *
+        FROM pages
+        WHERE user_id = $1
+          AND platform = 'instagram'
+          AND external_account_id = $2
+        LIMIT 1
+        `,
+        [userId, String(profileJson.id)]
+      );
+
+      page = existingPageResult.rows[0] || null;
+    }
+
+    if (!page) {
+      const updateResult = await pool.query(
+        `
+        UPDATE pages
+        SET
+          handle = $3,
+          url = $4,
+          verified = true,
+          verified_at = now()
+        WHERE user_id = $1
+          AND platform = 'instagram'
+          AND handle = $2
+        RETURNING *
+        `,
+        [userId, handle, handle, url]
+      );
+
+      page = updateResult.rows[0] || null;
+    }
+
+    if (!page) {
+      throw new Error('Could not create or find verified Instagram page');
+    }
+
+    await pool.query(
+      `
+      INSERT INTO instagram_connections(
+        user_id,
+        page_id,
+        instagram_user_id,
+        instagram_username,
+        encrypted_access_token,
+        token_expires_at,
+        created_at,
+        updated_at
+      )
+      VALUES($1, $2, $3, $4, $5, NULL, now(), now())
+      ON CONFLICT(user_id, instagram_user_id)
+      DO UPDATE SET
+        page_id = EXCLUDED.page_id,
+        instagram_username = EXCLUDED.instagram_username,
+        encrypted_access_token = EXCLUDED.encrypted_access_token,
+        token_expires_at = EXCLUDED.token_expires_at,
+        updated_at = now()
+      `,
+      [
+        userId,
+        page.id,
+        String(profileJson.id),
+        String(profileJson.username),
+        encryptToken(accessToken),
+      ]
+    );
+
+    res.redirect(`${FRONTEND_BASE_URL}/pages?instagram=connected`);
+  } catch (err) {
+    console.error('Instagram OAuth callback error', err);
+    res.redirect(`${FRONTEND_BASE_URL}/pages?instagram=error`);
+  }
+});
+
+
+// Admin API routes.
+// All admin routes require a verified Neon Auth token and a matching
+// neon_auth."user".role = 'admin' value. Do not rely only on frontend
+// route hiding for admin protection.
+app.get('/api/admin/me', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Missing authenticated user' });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT id, email, name, role
+      FROM neon_auth."user"
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const authUser = result.rows[0];
+
+    if (!authUser) {
+      return res.status(404).json({ error: 'Auth user not found' });
+    }
+
+    res.json({
+      data: {
+        id: authUser.id,
+        email: authUser.email,
+        name: authUser.name,
+        role: authUser.role || 'user',
+        isAdmin: authUser.role === 'admin',
+      },
+    });
+  } catch (err) {
+    console.error('Admin role lookup failed', err);
+    res.status(500).json({ error: 'Admin role lookup failed' });
+  }
+});
+
+app.get('/api/admin/summary', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const [
+      campaignCounts,
+      submissionCounts,
+      creatorCounts,
+      pageCounts,
+      withdrawalCounts,
+    ] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_campaigns,
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(status, '')) = 'active'
+              AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+          )::int AS active_campaigns
+        FROM campaigns
+      `),
+
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(status, '')) <> 'deleted'
+          )::int AS total_submissions,
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(status, '')) = 'approved'
+          )::int AS approved_submissions,
+          COALESCE(SUM(COALESCE(views_count, 0)), 0)::bigint AS total_views,
+          COALESCE(SUM(COALESCE(payment_amount, 0)), 0)::numeric AS total_payout
+        FROM submissions
+      `),
+
+      // A creator is someone who connected at least one page.
+      // This avoids counting Neon Auth test users who never used the app.
+      pool.query(`
+        SELECT COUNT(DISTINCT user_id)::int AS total_creators
+        FROM pages
+        WHERE user_id IS NOT NULL
+      `),
+
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_pages,
+          COUNT(*) FILTER (WHERE verified IS TRUE)::int AS verified_pages
+        FROM pages
+      `),
+
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(status, '')) IN ('requested', 'pending')
+          )::int AS pending_withdrawals,
+          COALESCE(
+            SUM(amount) FILTER (
+              WHERE LOWER(COALESCE(status, '')) IN ('requested', 'pending')
+            ),
+            0
+          )::numeric AS pending_withdrawal_amount
+        FROM withdrawals
+      `),
+    ]);
+
+    const campaigns = campaignCounts.rows[0] || {};
+    const submissions = submissionCounts.rows[0] || {};
+    const creators = creatorCounts.rows[0] || {};
+    const pages = pageCounts.rows[0] || {};
+    const withdrawals = withdrawalCounts.rows[0] || {};
+
+    res.json({
+      data: {
+        // These names intentionally match src/pages/admin/AdminDashboard.tsx.
+        totalCampaigns: Number(campaigns.total_campaigns || 0),
+        activeCampaigns: Number(campaigns.active_campaigns || 0),
+
+        totalSubmissions: Number(submissions.total_submissions || 0),
+        approvedSubmissions: Number(submissions.approved_submissions || 0),
+        totalViews: Number(submissions.total_views || 0),
+        totalPayout: Number(submissions.total_payout || 0),
+
+        totalCreators: Number(creators.total_creators || 0),
+
+        totalPages: Number(pages.total_pages || 0),
+        verifiedPages: Number(pages.verified_pages || 0),
+
+        pendingWithdrawals: Number(withdrawals.pending_withdrawals || 0),
+        pendingWithdrawalAmount: Number(withdrawals.pending_withdrawal_amount || 0),
+      },
+    });
+  } catch (err) {
+    console.error('Admin summary error', err);
+    res.status(500).json({ error: 'Failed to load admin summary' });
+  }
+});
+
+app.get('/api/admin/campaigns', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        c.*,
+        COUNT(DISTINCT s.id)::int AS submission_count,
+        COUNT(DISTINCT cp.id)::int AS participant_count,
+        COALESCE(SUM(s.views_count), 0)::bigint AS total_views,
+        COALESCE(SUM(s.payment_amount), 0)::numeric AS total_payout
+      FROM campaigns c
+      LEFT JOIN submissions s ON s.campaign_id = c.id
+      LEFT JOIN campaign_participants cp ON cp.campaign_id = c.id
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+      `
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin campaigns list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/campaigns/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM campaigns WHERE id = $1', [req.params.id]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Admin campaign detail error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.post('/api/admin/campaigns', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const {
+      title,
+      code,
+      client,
+      brief,
+      budget,
+      start_date,
+      end_date,
+      required_tags,
+      platforms,
+      audio_url,
+      audio_urls,
+      example_urls,
+      rules,
+      max_posts_per_creator,
+      status,
+    } = req.body;
+
+    if (!title || !end_date) {
+      return res.status(400).json({ error: 'Campaign title and end date are required' });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO campaigns(
+        title, code, client, brief, budget, start_date, end_date,
+        required_tags, platforms, audio_url, audio_urls, example_urls,
+        rules, max_posts_per_creator, status, created_at
+      )
+      VALUES($1,$2,$3,$4,$5,COALESCE($6::timestamp, now()),$7,$8,$9,$10,$11,$12,$13,COALESCE($14, 1),COALESCE($15, 'active'),now())
+      RETURNING *
+      `,
+      [
+        title,
+        code || null,
+        client || null,
+        brief || null,
+        numberOrNull(budget),
+        dateOrNull(start_date),
+        end_date,
+        normalizeArray(required_tags),
+        normalizeArray(platforms),
+        audio_url || null,
+        normalizeJsonObject(audio_urls),
+        normalizeJsonObject(example_urls),
+        normalizeJsonObject(rules),
+        numberOrNull(max_posts_per_creator),
+        status || 'active',
+      ]
+    );
+
+    res.json({ data: result.rows[0] });
+  } catch (err) {
+    console.error('Admin campaign create error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.put('/api/admin/campaigns/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const {
+      title,
+      code,
+      client,
+      brief,
+      budget,
+      start_date,
+      end_date,
+      required_tags,
+      platforms,
+      audio_url,
+      audio_urls,
+      example_urls,
+      rules,
+      max_posts_per_creator,
+      status,
+    } = req.body;
+
+    const result = await pool.query(
+      `
+      UPDATE campaigns
+      SET
+        title = COALESCE($2, title),
+        code = $3,
+        client = $4,
+        brief = $5,
+        budget = $6,
+        start_date = COALESCE($7::timestamp, start_date),
+        end_date = COALESCE($8::timestamp, end_date),
+        required_tags = $9,
+        platforms = $10,
+        audio_url = $11,
+        audio_urls = $12,
+        example_urls = $13,
+        rules = $14,
+        max_posts_per_creator = COALESCE($15, max_posts_per_creator),
+        status = COALESCE($16, status)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        req.params.id,
+        title || null,
+        code || null,
+        client || null,
+        brief || null,
+        numberOrNull(budget),
+        dateOrNull(start_date),
+        dateOrNull(end_date),
+        normalizeArray(required_tags),
+        normalizeArray(platforms),
+        audio_url || null,
+        normalizeJsonObject(audio_urls),
+        normalizeJsonObject(example_urls),
+        normalizeJsonObject(rules),
+        numberOrNull(max_posts_per_creator),
+        status || null,
+      ]
+    );
+
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Admin campaign update error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.delete('/api/admin/campaigns/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM campaigns WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin campaign delete error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/submissions', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { campaign_id, status } = req.query;
+    const values = [];
+    const where = [];
+
+    if (campaign_id) {
+      values.push(campaign_id);
+      where.push(`s.campaign_id = $${values.length}`);
+    }
+
+    if (status) {
+      values.push(status);
+      where.push(`s.status = $${values.length}`);
+    }
+
+    const sql = `
+      SELECT
+        s.*,
+        c.title AS campaign_title,
+        p.handle AS page_handle,
+        p.platform AS page_platform,
+        p.follower_count AS page_follower_count,
+        p.verified AS page_verified,
+        pr.role AS creator_role
+      FROM submissions s
+      LEFT JOIN campaigns c ON c.id = s.campaign_id
+      LEFT JOIN pages p ON p.id = s.page_id OR (p.user_id = s.user_id AND p.platform = s.platform)
+      LEFT JOIN profiles pr ON pr.id = s.user_id
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY COALESCE(s.uploaded_at, s.created_at) DESC
+    `;
+
+    const result = await pool.query(sql, values);
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin submissions list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.patch('/api/admin/submissions/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { status, views_count, payment_amount, audio_verified } = req.body;
+
+    const result = await pool.query(
+      `
+      UPDATE submissions
+      SET
+        status = COALESCE($2, status),
+        views_count = COALESCE($3, views_count),
+        payment_amount = COALESCE($4, payment_amount),
+        audio_verified = COALESCE($5, audio_verified)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        req.params.id,
+        status || null,
+        views_count === undefined ? null : Number(views_count),
+        payment_amount === undefined ? null : Number(payment_amount),
+        audio_verified === undefined ? null : Boolean(audio_verified),
+      ]
+    );
+
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Admin submission update error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        pr.id,
+        pr.role,
+        pr.total_earnings,
+        pr.pix_key,
+        pr.created_at,
+        COUNT(DISTINCT p.id)::int AS page_count,
+        COUNT(DISTINCT s.id)::int AS submission_count,
+        COALESCE(SUM(s.views_count), 0)::bigint AS total_views,
+        COALESCE(SUM(s.payment_amount), 0)::numeric AS total_payout
+      FROM profiles pr
+      LEFT JOIN pages p ON p.user_id = pr.id
+      LEFT JOIN submissions s ON s.user_id = pr.id
+      GROUP BY pr.id
+      ORDER BY pr.created_at DESC
+      `
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin creators list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/pages', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT p.*, pr.role AS owner_role
+      FROM pages p
+      LEFT JOIN profiles pr ON pr.id = p.user_id
+      ORDER BY p.created_at DESC
+      `
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin pages list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.patch('/api/admin/pages/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { verified, tags, follower_count } = req.body;
+
+    const result = await pool.query(
+      `
+      UPDATE pages
+      SET
+        verified = COALESCE($2, verified),
+        verified_at = CASE WHEN $2 = true THEN COALESCE(verified_at, now()) ELSE verified_at END,
+        tags = COALESCE($3, tags),
+        follower_count = COALESCE($4, follower_count)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        req.params.id,
+        verified === undefined ? null : Boolean(verified),
+        tags === undefined ? null : normalizeArray(tags),
+        follower_count === undefined ? null : Number(follower_count),
+      ]
+    );
+
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Admin page update error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/withdrawals', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM withdrawals
+      ORDER BY requested_at DESC
+      `
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin withdrawals list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.patch('/api/admin/withdrawals/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ error: 'Missing withdrawal status' });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE withdrawals
+      SET status = $2
+      WHERE id = $1
+      RETURNING *
+      `,
+      [req.params.id, status]
+    );
+
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Admin withdrawal update error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/errors', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM error_logs
+      ORDER BY created_at DESC
+      LIMIT 200
+      `
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin error logs list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.get('/api/admin/tags', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM tags ORDER BY name ASC');
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('Admin tags list error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.post('/api/admin/tags', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Tag name is required' });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO tags(name, created_at)
+      VALUES($1, now())
+      ON CONFLICT(name) DO UPDATE SET name = EXCLUDED.name
+      RETURNING *
+      `,
+      [String(name).trim()]
+    );
+
+    res.json({ data: result.rows[0] });
+  } catch (err) {
+    console.error('Admin tag create error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+app.delete('/api/admin/tags/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM tags WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin tag delete error', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
 
 // Sheets metrics endpoint (placeholder) — returns empty array unless you implement fetching logic
 app.get('/api/sheets/metrics', async (req, res) => {

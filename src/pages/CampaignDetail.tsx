@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/integrations/apiClient";
 import { getNeonSession, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,6 +74,59 @@ const platformIcons = {
   youtube_shorts: Youtube,
 };
 
+function normalizeStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === "string");
+      }
+    } catch {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function normalizeRecord(value: unknown): Record<string, string> | null {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, string>;
+  }
+
+  return null;
+}
+
+function normalizeCampaign(data: any): Campaign {
+  return {
+    ...data,
+    required_tags: normalizeStringList(data.required_tags),
+    platforms: normalizeStringList(data.platforms),
+    audio_urls: normalizeRecord(data.audio_urls),
+    example_urls: normalizeRecord(data.example_urls),
+  } as Campaign;
+}
+
 const CampaignDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -107,69 +160,98 @@ const CampaignDetail = () => {
     if (!user || !id) return;
 
     const fetchData = async () => {
-      const [campaignResult, pagesResult, participantResult, submissionsResult] = await Promise.all([
-        supabase.from("campaigns").select("*").eq("id", id).single(),
-        supabase.from("pages").select("id, platform, handle, tags").eq("user_id", user.id),
-        supabase.from("campaign_participants").select("*").eq("campaign_id", id).eq("user_id", user.id).maybeSingle(),
-        supabase
-          .from("submissions")
-          .select("id, user_id, title, post_url, platform, views_count, profiles(full_name, username)")
-          .eq("campaign_id", id)
-          .eq("status", "approved")
-      ]);
+      try {
+        const [campaignData, pagesData, participantData, submissionsData] = await Promise.all([
+          apiClient.tables.list("campaigns", { id, single: true }),
+          apiClient.pages.list(),
+          apiClient.tables.list("campaign_participants", {
+            campaign_id: id,
+            user_id: user.id,
+            single: true,
+          }).catch(() => null),
+          apiClient.tables.list("submissions", {
+            campaign_id: id,
+            status: "approved",
+          }).catch(() => []),
+        ]);
 
-      if (campaignResult.data) {
-        const data = campaignResult.data;
-        setCampaign({
-          ...data,
-          audio_urls: (data.audio_urls as Record<string, string>) || null,
-          example_urls: ((data as any).example_urls as Record<string, string>) || null,
-        } as Campaign);
-      }
-      if (pagesResult.data) setPages(pagesResult.data);
-      if (participantResult.data) setHasJoined(true);
-      if (submissionsResult.data) {
-        setSubmissions(submissionsResult.data);
-        
-        // Fetch snapshots for all submissions
-        const submissionIds = submissionsResult.data.map(s => s.id);
-        if (submissionIds.length > 0) {
-          const { data: snapshotsData } = await supabase
-            .from("snapshots")
-            .select("submission_id, views, likes, comments, shares")
-            .in("submission_id", submissionIds)
-            .order("timestamp", { ascending: false });
-          
-          if (snapshotsData) {
-            // Get latest snapshot for each submission
-            const latestSnapshots = snapshotsData.reduce((acc, snapshot) => {
-              if (!acc[snapshot.submission_id]) {
-                acc[snapshot.submission_id] = snapshot;
-              }
-              return acc;
-            }, {} as Record<string, Snapshot>);
-            
-            setSnapshots(Object.values(latestSnapshots));
-            
-            // Calculate aggregated metrics
-            const totalViews = Object.values(latestSnapshots).reduce((sum, s) => sum + (s.views || 0), 0);
-            const totalLikes = Object.values(latestSnapshots).reduce((sum, s) => sum + (s.likes || 0), 0);
-            const totalComments = Object.values(latestSnapshots).reduce((sum, s) => sum + (s.comments || 0), 0);
-            const totalShares = Object.values(latestSnapshots).reduce((sum, s) => sum + (s.shares || 0), 0);
-            const engagementRate = totalViews > 0 
-              ? ((totalLikes + totalComments + totalShares) / totalViews) * 100 
-              : 0;
-            
-            setMetrics({
-              totalViews,
-              totalLikes,
-              totalComments,
-              totalShares,
-              engagementRate,
-              submissionCount: submissionsResult.data.length,
-            });
-          }
+        if (campaignData) {
+          setCampaign(normalizeCampaign(campaignData));
+        } else {
+          toast({
+            title: "Campaign not found",
+            description: "This campaign could not be loaded.",
+            variant: "destructive",
+          });
         }
+
+        setPages(Array.isArray(pagesData) ? pagesData : []);
+        setHasJoined(Boolean(participantData));
+
+        const normalizedSubmissions = Array.isArray(submissionsData)
+          ? submissionsData.map((submission: any) => ({
+              ...submission,
+              profiles: submission.profiles ?? null,
+            }))
+          : [];
+
+        setSubmissions(normalizedSubmissions);
+
+        const submissionIds = normalizedSubmissions.map((submission: Submission) => submission.id);
+
+        if (submissionIds.length === 0) {
+          setSnapshots([]);
+          setMetrics({
+            totalViews: 0,
+            totalLikes: 0,
+            totalComments: 0,
+            totalShares: 0,
+            engagementRate: 0,
+            submissionCount: 0,
+          });
+          return;
+        }
+
+        // The generic API shim only supports simple equality filters, so fetch snapshots
+        // and filter them in the frontend for now.
+        const snapshotsData = await apiClient.tables
+          .list("snapshots")
+          .catch(() => []);
+
+        const latestSnapshotsBySubmission = (Array.isArray(snapshotsData) ? snapshotsData : [])
+          .filter((snapshot: Snapshot) => submissionIds.includes(snapshot.submission_id))
+          .reduce((acc: Record<string, Snapshot>, snapshot: Snapshot) => {
+            if (!acc[snapshot.submission_id]) {
+              acc[snapshot.submission_id] = snapshot;
+            }
+            return acc;
+          }, {});
+
+        const latestSnapshots = Object.values(latestSnapshotsBySubmission);
+        setSnapshots(latestSnapshots);
+
+        const totalViews = latestSnapshots.reduce((sum, snapshot) => sum + (snapshot.views || 0), 0);
+        const totalLikes = latestSnapshots.reduce((sum, snapshot) => sum + (snapshot.likes || 0), 0);
+        const totalComments = latestSnapshots.reduce((sum, snapshot) => sum + (snapshot.comments || 0), 0);
+        const totalShares = latestSnapshots.reduce((sum, snapshot) => sum + (snapshot.shares || 0), 0);
+        const engagementRate =
+          totalViews > 0 ? ((totalLikes + totalComments + totalShares) / totalViews) * 100 : 0;
+
+        setMetrics({
+          totalViews,
+          totalLikes,
+          totalComments,
+          totalShares,
+          engagementRate,
+          submissionCount: normalizedSubmissions.length,
+        });
+      } catch (err: any) {
+        console.error("Error loading campaign detail:", err);
+        toast({
+          title: "Error",
+          description: err.message || "Failed to load campaign details",
+          variant: "destructive",
+        });
       }
     };
 
@@ -190,28 +272,37 @@ const CampaignDetail = () => {
     }
 
     // Check if user has a page with matching tags
-    const hasMatchingTag = pages.some(page => 
-      page.tags.some(tag => campaign.required_tags.includes(tag))
-    );
+    const hasRequiredTags = campaign.required_tags && campaign.required_tags.length > 0;
+
+    const hasMatchingTag =
+      !hasRequiredTags ||
+      pages.some(page =>
+        page.tags.some(tag => campaign.required_tags.includes(tag))
+      );
 
     if (!hasMatchingTag) {
-      toast({ 
-        title: "Cannot join campaign", 
+      toast({
+        title: "Cannot join campaign",
         description: "You cannot join a campaign that your tags don't match with",
-        variant: "destructive" 
+        variant: "destructive",
       });
       return;
     }
 
-    const { error } = await supabase
-      .from("campaign_participants")
-      .insert({ campaign_id: id, user_id: user.id });
+    try {
+      await apiClient.tables.create("campaign_participants", {
+        campaign_id: id,
+        user_id: user.id,
+      });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
       setHasJoined(true);
       toast({ title: "Success", description: "You've joined the campaign!" });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || String(err),
+        variant: "destructive",
+      });
     }
   };
 
@@ -400,20 +491,21 @@ const CampaignDetail = () => {
                         Add a page
                       </Button>
                     </div>
-                  ) : !pages.some(page => page.tags.some(tag => campaign.required_tags.includes(tag))) ? (
-                    <div className="text-center p-4 bg-muted/50 rounded-lg">
-                      <p className="text-muted-foreground mb-2">
-                        You need a page with at least one matching tag to join this campaign.
-                      </p>
-                      <Button variant="default" onClick={() => navigate("/pages")}>
-                        Update your pages
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button onClick={handleJoinCampaign} className="w-full" size="lg">
-                      Join Campaign
+                  ) : campaign.required_tags.length > 0 &&
+                    !pages.some(page => page.tags.some(tag => campaign.required_tags.includes(tag))) ? (
+                  <div className="text-center p-4 bg-muted/50 rounded-lg">
+                    <p className="text-muted-foreground mb-2">
+                      You need a page with at least one matching tag to join this campaign.
+                    </p>
+                    <Button variant="default" onClick={() => navigate("/pages")}>
+                      Update your pages
                     </Button>
-                  )}
+                  </div>
+                ) : (
+                  <Button onClick={handleJoinCampaign} className="w-full" size="lg">
+                    Join Campaign
+                  </Button>
+                )}
                 </>
               ) : (
                 <div className="text-center p-4 bg-primary/10 rounded-lg border border-primary/20">
