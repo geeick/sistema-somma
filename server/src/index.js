@@ -349,11 +349,40 @@ app.delete('/api/pages/:id', verifyToken, async (req, res) => {
 app.get('/api/profile', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const result = await pool.query('SELECT total_earnings, pix_key FROM profiles WHERE id = $1', [userId]);
-    res.json({ data: result.rows[0] || null });
+
+    const result = await pool.query(
+      `
+      SELECT
+        total_earnings,
+        pix_key_last4
+      FROM profiles
+      WHERE id = $1
+      `,
+      [userId]
+    );
+
+    const profile = result.rows[0];
+
+    res.json({
+      data: profile
+        ? {
+            total_earnings: profile.total_earnings,
+            pix_key: profile.pix_key_last4
+              ? `•••• ${profile.pix_key_last4}`
+              : null,
+          }
+        : {
+            total_earnings: 0,
+            pix_key: null,
+          },
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'DB error' });
+    console.error('Profile load error', err);
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
@@ -372,14 +401,47 @@ app.post('/api/withdrawals', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
     const { amount, pix_key } = req.body;
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({
+        error: 'Withdrawal amount must be greater than 0',
+      });
+    }
+
+    const pixKeyLast4 =
+      typeof pix_key === 'string' && pix_key.trim()
+        ? pix_key.trim().slice(-4)
+        : null;
+
+    if (pixKeyLast4) {
+      await pool.query(
+        `
+        INSERT INTO profiles(id, total_earnings, pix_key_last4, created_at)
+        VALUES($1, 0, $2, now())
+        ON CONFLICT (id)
+        DO UPDATE SET pix_key_last4 = EXCLUDED.pix_key_last4
+        `,
+        [userId, pixKeyLast4]
+      );
+    }
+
     const result = await pool.query(
-      'INSERT INTO withdrawals(user_id, amount, pix_key, status, requested_at) VALUES($1,$2,$3,$4,now()) RETURNING *',
-      [userId, amount, pix_key, 'requested']
+      `
+      INSERT INTO withdrawals(user_id, amount, status, requested_at)
+      VALUES($1, $2, 'requested', now())
+      RETURNING *
+      `,
+      [userId, amount]
     );
+
     res.json({ data: result.rows[0] });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'DB error' });
+    console.error('Withdrawal create error', err);
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
@@ -1125,7 +1187,7 @@ app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
         SELECT
           id::text AS user_id,
           COALESCE(total_earnings, 0)::numeric AS total_earnings,
-          pix_key,
+          pix_key_last4,
           created_at
         FROM profiles
       )
@@ -1135,7 +1197,10 @@ app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
         COALESCE(au.name, au.email) AS name,
         COALESCE(au.role, 'user') AS role,
         COALESCE(pr.total_earnings, ss.total_payout, 0)::numeric AS total_earnings,
-        pr.pix_key,
+        CASE
+        WHEN pr.pix_key_last4 IS NOT NULL THEN '**** ' || pr.pix_key_last4
+          ELSE NULL
+        END AS pix_key,
         COALESCE(pr.created_at, au."createdAt") AS created_at,
         COALESCE(ps.page_count, 0)::int AS page_count,
         COALESCE(ss.submission_count, 0)::int AS submission_count,
@@ -1226,16 +1291,31 @@ app.get('/api/admin/withdrawals', verifyToken, requireAdmin, async (_req, res) =
   try {
     const result = await pool.query(
       `
-      SELECT *
-      FROM withdrawals
-      ORDER BY requested_at DESC
+      SELECT
+        w.*,
+        au.email AS creator_email,
+        COALESCE(au.name, au.email, w.user_id::text) AS creator_name,
+        CASE
+          WHEN pr.pix_key_last4 IS NOT NULL THEN '•••• ' || pr.pix_key_last4
+          ELSE NULL
+        END AS pix_key
+      FROM withdrawals w
+      LEFT JOIN neon_auth."user" au
+        ON au.id::text = w.user_id::text
+      LEFT JOIN profiles pr
+        ON pr.id::text = w.user_id::text
+      ORDER BY w.requested_at DESC
       `
     );
 
     res.json({ data: result.rows });
   } catch (err) {
     console.error('Admin withdrawals list error', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
@@ -1331,6 +1411,119 @@ app.delete('/api/admin/tags/:id', verifyToken, requireAdmin, async (req, res) =>
 // Sheets metrics endpoint (placeholder) — returns empty array unless you implement fetching logic
 app.get('/api/sheets/metrics', async (req, res) => {
   res.json({ status: 'success', data: [] });
+});
+
+app.post('/api/submissions', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { campaign_id, page_id, post_url, audio_url } = req.body;
+
+    if (!campaign_id || !page_id || !post_url) {
+      return res.status(400).json({
+        error: 'Campaign, approved page, and post URL are required',
+      });
+    }
+
+    const pageResult = await pool.query(
+      `
+      SELECT id, user_id, platform, handle, verified
+      FROM pages
+      WHERE id::text = $1
+        AND user_id::text = $2
+        AND verified IS TRUE
+      LIMIT 1
+      `,
+      [String(page_id), String(userId)]
+    );
+
+    const page = pageResult.rows[0];
+
+    if (!page) {
+      return res.status(400).json({
+        error: 'You can only submit content from one of your approved pages',
+      });
+    }
+
+    const campaignResult = await pool.query(
+      `
+      SELECT id, title, status, end_date, platforms, audio_url
+      FROM campaigns
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [campaign_id]
+    );
+
+    const campaign = campaignResult.rows[0];
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    if (campaign.status !== 'active') {
+      return res.status(400).json({
+        error: 'This campaign is not currently active',
+      });
+    }
+
+    if (campaign.end_date && new Date(campaign.end_date) < new Date()) {
+      return res.status(400).json({
+        error: 'This campaign has ended',
+      });
+    }
+
+    const allowedPlatforms = Array.isArray(campaign.platforms)
+      ? campaign.platforms
+      : [];
+
+    if (
+      allowedPlatforms.length > 0 &&
+      !allowedPlatforms.includes(page.platform)
+    ) {
+      return res.status(400).json({
+        error: `This campaign does not accept ${page.platform} submissions`,
+      });
+    }
+
+    const audioVerified = !campaign.audio_url;
+
+    const result = await pool.query(
+      `
+      INSERT INTO submissions(
+        user_id,
+        campaign_id,
+        page_id,
+        title,
+        platform,
+        post_url,
+        status,
+        audio_verified,
+        uploaded_at,
+        created_at
+      )
+      VALUES($1,$2,$3,$4,$5,$6,'pending',$7,now(),now())
+      RETURNING *
+      `,
+      [
+        userId,
+        campaign.id,
+        page.id,
+        `${campaign.title || 'Campaign'} - Submission`,
+        page.platform,
+        post_url,
+        audioVerified,
+      ]
+    );
+
+    res.json({ data: result.rows[0] });
+  } catch (err) {
+    console.error('Submission create error', err);
+    res.status(500).json({
+      error: 'Failed to create submission',
+      details: err.message,
+      code: err.code,
+    });
+  }
 });
 
 // Generic table endpoints (basic CRUD) to support frontend compatibility shim
