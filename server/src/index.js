@@ -5,6 +5,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const { chromium } = require('playwright');
 
 // Load the project's root .env.local when running from the server folder.
 dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
@@ -101,6 +102,150 @@ function parseAndVerifyOAuthState(state) {
   }
 
   return parsed;
+}
+
+function computePayoutFromPlays(plays) {
+  const count = Number(plays || 0);
+
+  if (count <= 0) return 0;
+  if (count < 1000) return 5;
+  if (count < 5000) return 10;
+  if (count < 25000) return 20;
+  if (count < 50000) return 50;
+  if (count < 100000) return 70;
+  if (count < 250000) return 100;
+  if (count < 500000) return 150;
+  if (count < 1000000) return 200;
+
+  return 250;
+}
+
+function parseCompactNumber(value) {
+  if (!value) return 0;
+
+  const cleaned = String(value)
+    .trim()
+    .replace(/,/g, "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+
+  const match = cleaned.match(/^(\d+(\.\d+)?)([KMB])?$/);
+
+  if (!match) {
+    const plain = Number(cleaned.replace(/[^\d.]/g, ""));
+    return Number.isFinite(plain) ? Math.round(plain) : 0;
+  }
+
+  const number = Number(match[1]);
+  const suffix = match[3];
+
+  if (!Number.isFinite(number)) return 0;
+
+  if (suffix === "K") return Math.round(number * 1000);
+  if (suffix === "M") return Math.round(number * 1000000);
+  if (suffix === "B") return Math.round(number * 1000000000);
+
+  return Math.round(number);
+}
+
+function findNumberByPatterns(text, patterns) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return parseCompactNumber(match[1]);
+    }
+  }
+
+  return 0;
+}
+
+function findUsername(text, title, postUrl) {
+  const titleMatch = title.match(/^(.+?) on Instagram/i);
+  if (titleMatch?.[1]) return titleMatch[1].trim().replace(/^@/, "");
+
+  const atMatch = text.match(/@([a-zA-Z0-9._]+)/);
+  if (atMatch?.[1]) return atMatch[1];
+
+  try {
+    const url = new URL(postUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+
+    if (parts.length > 0 && !["reel", "p", "tv"].includes(parts[0])) {
+      return parts[0].replace(/^@/, "");
+    }
+  } catch (_err) {
+    return "";
+  }
+
+  return "";
+}
+
+async function scrapeInstagramMetrics(postUrl) {
+  if (!postUrl) {
+    throw new Error("Missing post URL");
+  }
+
+  const browser = await chromium.launch({
+    headless: true,
+  });
+
+  try {
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      locale: "en-US",
+    });
+
+    const page = await context.newPage();
+
+    await page.goto(postUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45000,
+    });
+
+    await page.waitForTimeout(5000);
+
+    const title = await page.title().catch(() => "");
+    const bodyText = await page.locator("body").innerText({ timeout: 10000 }).catch(() => "");
+    const html = await page.content().catch(() => "");
+
+    const combined = `${title}\n${bodyText}\n${html}`;
+
+    const username = findUsername(combined, title, postUrl);
+
+    const likes = findNumberByPatterns(combined, [
+      /"like_count"\s*:\s*(\d+)/i,
+      /"edge_media_preview_like"\s*:\s*\{\s*"count"\s*:\s*(\d+)/i,
+      /([\d,.]+[KMB]?)\s+likes/i,
+      /liked by\s+([\d,.]+[KMB]?)/i,
+    ]);
+
+    const plays = findNumberByPatterns(combined, [
+      /"play_count"\s*:\s*(\d+)/i,
+      /"video_view_count"\s*:\s*(\d+)/i,
+      /"view_count"\s*:\s*(\d+)/i,
+      /([\d,.]+[KMB]?)\s+plays/i,
+      /([\d,.]+[KMB]?)\s+views/i,
+    ]);
+
+    return {
+      username,
+      likes,
+      plays,
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+async function scrapePostMetrics(postUrl) {
+  const url = String(postUrl || "").toLowerCase();
+
+  if (url.includes("instagram.com")) {
+    return scrapeInstagramMetrics(postUrl);
+  }
+
+  throw new Error("Only Instagram scraping is supported right now");
 }
 
 async function readJsonResponse(response) {
@@ -253,6 +398,42 @@ function dateOrNull(value) {
   return Number.isNaN(date.getTime()) ? null : value;
 }
 
+async function scrapePostMetrics(postUrl) {
+  if (!postUrl) {
+    throw new Error('Missing post URL');
+  }
+
+  const scraperUrl = process.env.SCRAPER_API_URL;
+
+  if (!scraperUrl) {
+    throw new Error('SCRAPER_API_URL is not set in .env.local');
+  }
+
+  const response = await fetch(
+    `${scraperUrl}?url=${encodeURIComponent(postUrl)}`,
+    process.env.SCRAPER_API_KEY
+      ? {
+          headers: {
+            Authorization: `Bearer ${process.env.SCRAPER_API_KEY}`,
+          },
+        }
+      : undefined
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || 'Scraper failed');
+  }
+
+  return {
+    username: String(data?.username || data?.userName || '').trim(),
+    likes: Number(data?.likes || data?.like_count || 0),
+    plays: Number(data?.plays || data?.views || data?.view_count || 0),
+  };
+}
+
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -1520,6 +1701,47 @@ app.post('/api/submissions', verifyToken, async (req, res) => {
     console.error('Submission create error', err);
     res.status(500).json({
       error: 'Failed to create submission',
+      details: err.message,
+      code: err.code,
+    });
+  }
+});
+
+app.patch('/api/admin/submissions/:id/metrics', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { username, likes, plays } = req.body;
+
+    const likesCount = Number(likes || 0);
+    const playsCount = Number(plays || 0);
+    const payout = computePayoutFromPlays(playsCount);
+
+    const result = await pool.query(
+      `
+      UPDATE submissions
+      SET
+        username = $2,
+        likes_count = $3,
+        views_count = $4,
+        payment_amount = $5,
+        metrics_synced_at = now(),
+        metrics_source = 'manual'
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        req.params.id,
+        username || null,
+        likesCount,
+        playsCount,
+        payout,
+      ]
+    );
+
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Manual metrics update error', err);
+    res.status(500).json({
+      error: 'Failed to update metrics',
       details: err.message,
       code: err.code,
     });
