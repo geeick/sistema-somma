@@ -1,366 +1,523 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import { DollarSign, Clock, CheckCircle, XCircle, TrendingUp, Users } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useEffect, useMemo, useState } from "react";
+import { getNeonAccessToken } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  Download,
+  RefreshCw,
+  TrendingUp,
+  Users,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 
-interface Withdrawal {
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+type Withdrawal = {
   id: string;
   user_id: string;
-  amount: number;
-  pix_key: string;
-  status: string;
-  requested_at: string;
-  profiles: {
-    full_name: string | null;
-    email: string | null;
-  } | null;
+  amount: number | string | null;
+  pix_key: string | null;
+  status: string | null;
+  requested_at: string | null;
+  creator_email?: string | null;
+  creator_name?: string | null;
+};
+
+async function adminRequest(path: string, options: RequestInit = {}) {
+  const token = await getNeonAccessToken();
+
+  if (!token) {
+    throw new Error("No Neon Auth token found. Sign in again.");
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  const json = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(
+      `Backend returned ${res.status}: ${
+        json?.details || json?.error || json?.message || "Unknown error"
+      }`
+    );
+  }
+
+  return json?.data;
 }
 
-interface Stats {
-  pendingWithdrawals: number;
-  totalPendingAmount: number;
-  totalPaidOut: number;
-  activeCreators: number;
+function formatMoney(value?: number | string | null) {
+  return `R$ ${Number(value || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+
+  return date.toLocaleDateString("pt-BR");
+}
+
+function getStatusBadgeVariant(status?: string | null) {
+  if (status === "paid") return "default";
+  if (status === "approved") return "default";
+  if (status === "rejected") return "destructive";
+  return "secondary";
+}
+
+function StatCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  icon: any;
+}) {
+  return (
+    <Card className="bg-gradient-card border-border">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {title}
+        </CardTitle>
+        <Icon className="h-4 w-4 text-primary" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function WalletAdmin() {
+  const { toast } = useToast();
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
-  const [stats, setStats] = useState<Stats>({
-    pendingWithdrawals: 0,
-    totalPendingAmount: 0,
-    totalPaidOut: 0,
-    activeCreators: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdatingId, setIsUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [rawResponse, setRawResponse] = useState<any>(null);
+
+  const loadWalletData = async () => {
+    setIsLoading(true);
+    setError("");
+    setRawResponse(null);
+
+    try {
+      const data = await adminRequest("/api/admin/withdrawals");
+      setRawResponse(data);
+      setWithdrawals(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error("Failed to load wallet data:", err);
+      setError(err.message || "Failed to load wallet data");
+      setWithdrawals([]);
+
+      toast({
+        title: "Failed to load wallet data",
+        description: err.message || "Could not load wallet data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetchData();
+    loadWalletData();
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const stats = useMemo(() => {
+    const pending = withdrawals.filter((item) => item.status === "requested" || item.status === "pending");
+    const paid = withdrawals.filter((item) => item.status === "paid");
+    const activeCreatorIds = new Set(
+      withdrawals
+        .map((item) => item.user_id)
+        .filter(Boolean)
+    );
+
+    const pendingAmount = pending.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0
+    );
+
+    const totalPaid = paid.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0
+    );
+
+    return {
+      pendingCount: pending.length,
+      pendingAmount,
+      totalPaid,
+      activeCreators: activeCreatorIds.size,
+    };
+  }, [withdrawals]);
+
+  const pendingWithdrawals = useMemo(
+    () =>
+      withdrawals
+        .filter((item) => item.status === "requested" || item.status === "pending")
+        .sort(
+          (a, b) =>
+            new Date(b.requested_at || 0).getTime() -
+            new Date(a.requested_at || 0).getTime()
+        ),
+    [withdrawals]
+  );
+
+  const updateWithdrawalStatus = async (withdrawal: Withdrawal, status: string) => {
+    setIsUpdatingId(withdrawal.id);
+
     try {
-      // Fetch pending withdrawals
-      const { data: withdrawalsData, error: withdrawalsError } = await supabase
-        .from('withdrawals')
-        .select('*, profiles(full_name, email)')
-        .eq('status', 'requested')
-        .order('requested_at', { ascending: true });
-
-      if (withdrawalsError) throw withdrawalsError;
-      setWithdrawals(withdrawalsData || []);
-
-      // Calculate stats
-      const pendingAmount = withdrawalsData?.reduce((sum, w) => sum + Number(w.amount), 0) || 0;
-
-      const { data: paidWithdrawals } = await supabase
-        .from('withdrawals')
-        .select('amount')
-        .eq('status', 'paid');
-      
-      const totalPaid = paidWithdrawals?.reduce((sum, w) => sum + Number(w.amount), 0) || 0;
-
-      const { data: creators } = await supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true });
-
-      setStats({
-        pendingWithdrawals: withdrawalsData?.length || 0,
-        totalPendingAmount: pendingAmount,
-        totalPaidOut: totalPaid,
-        activeCreators: creators?.length || 0,
+      const updated = await adminRequest(`/api/admin/withdrawals/${withdrawal.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
       });
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to load wallet data');
+
+      setWithdrawals((current) =>
+        current.map((item) =>
+          item.id === withdrawal.id ? { ...item, ...updated } : item
+        )
+      );
+
+      toast({
+        title: "Success",
+        description: `Withdrawal marked as ${status}`,
+      });
+    } catch (err: any) {
+      console.error("Failed to update withdrawal:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update withdrawal",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      setIsUpdatingId(null);
     }
   };
 
-  const handleApprove = async (withdrawalId: string) => {
-    try {
-      const { error } = await supabase
-        .from('withdrawals')
-        .update({ status: 'approved', approved_at: new Date().toISOString() })
-        .eq('id', withdrawalId);
+  const exportCsv = () => {
+    const rows = [
+      ["ID", "Creator", "User ID", "Amount", "PIX Key", "Status", "Requested At"],
+      ...withdrawals.map((withdrawal) => [
+        withdrawal.id,
+        withdrawal.creator_email || withdrawal.creator_name || withdrawal.user_id || "",
+        withdrawal.user_id || "",
+        String(withdrawal.amount || 0),
+        withdrawal.pix_key || "",
+        withdrawal.status || "",
+        formatDate(withdrawal.requested_at),
+      ]),
+    ];
 
-      if (error) throw error;
-      
-      toast.success('Withdrawal approved');
-      fetchData();
-    } catch (error) {
-      console.error('Error approving withdrawal:', error);
-      toast.error('Failed to approve withdrawal');
-    }
+    const csv = rows
+      .map((row) =>
+        row
+          .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `withdrawals-${new Date().toISOString()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const handleReject = async (withdrawalId: string) => {
-    try {
-      // Get withdrawal details to refund the user
-      const { data: withdrawal } = await supabase
-        .from('withdrawals')
-        .select('user_id, amount')
-        .eq('id', withdrawalId)
-        .single();
-
-      if (!withdrawal) throw new Error('Withdrawal not found');
-
-      // Get current balance
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('balance_available')
-        .eq('id', withdrawal.user_id)
-        .single();
-
-      if (!profile) throw new Error('Profile not found');
-
-      // Refund to user's available balance
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ 
-          balance_available: Number(profile.balance_available) + Number(withdrawal.amount)
-        })
-        .eq('id', withdrawal.user_id);
-
-      if (profileError) throw profileError;
-
-      // Add reversal entry to ledger
-      const { error: ledgerError } = await supabase
-        .from('ledger')
-        .insert({
-          user_id: withdrawal.user_id,
-          amount: withdrawal.amount,
-          type: 'reversal',
-          ref_id: withdrawalId,
-          description: 'Withdrawal request rejected - refunded to balance',
-        });
-
-      if (ledgerError) throw ledgerError;
-
-      // Update withdrawal status
-      const { error } = await supabase
-        .from('withdrawals')
-        .update({ status: 'rejected' })
-        .eq('id', withdrawalId);
-
-      if (error) throw error;
-      
-      toast.success('Withdrawal rejected and amount refunded');
-      fetchData();
-    } catch (error) {
-      console.error('Error rejecting withdrawal:', error);
-      toast.error('Failed to reject withdrawal');
-    }
-  };
-
-  const handleMarkAsPaid = async (withdrawalId: string) => {
-    try {
-      const { error } = await supabase
-        .from('withdrawals')
-        .update({ status: 'paid', paid_at: new Date().toISOString() })
-        .eq('id', withdrawalId);
-
-      if (error) throw error;
-      
-      toast.success('Withdrawal marked as paid');
-      fetchData();
-    } catch (error) {
-      console.error('Error marking as paid:', error);
-      toast.error('Failed to mark as paid');
-    }
-  };
-
-  if (loading) {
-    return <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold mb-2">Wallet & Payouts</h1>
-        <p className="text-muted-foreground">Loading...</p>
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Carteira & Pagamentos</h1>
+          <p className="text-muted-foreground">Loading wallet data...</p>
+        </div>
       </div>
-    </div>;
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-gradient-card border-border max-w-3xl">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-8 w-8 text-destructive" />
+              <div>
+                <CardTitle>Could not load wallet data</CardTitle>
+                <CardDescription>{error}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <Button onClick={loadWalletData}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try again
+            </Button>
+
+            <div className="rounded-lg bg-muted p-4">
+              <p className="font-semibold mb-2">Debug info</p>
+              <pre className="text-xs whitespace-pre-wrap overflow-x-auto">
+                {JSON.stringify(rawResponse, null, 2)}
+              </pre>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              If this says Backend returned 500, update the backend
+              /api/admin/withdrawals route.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Carteira & Pagamentos</h1>
-          <p className="text-muted-foreground">Processar saques e gerenciar finanças</p>
+          <h1 className="text-3xl font-bold">Carteira & Pagamentos</h1>
+          <p className="text-muted-foreground">
+            Processar saques e gerenciar finanças.
+          </p>
         </div>
+
         <Button
           variant="outline"
-          onClick={() => {
-            const csv = [
-              ['Criador', 'Email', 'Chave PIX', 'Valor', 'Status', 'Solicitado em'],
-              ...withdrawals.map(w => [
-                w.profiles?.full_name || 'Desconhecido',
-                w.profiles?.email || '',
-                w.pix_key,
-                Number(w.amount).toFixed(2),
-                w.status,
-                new Date(w.requested_at).toLocaleDateString('pt-BR'),
-              ]),
-            ].map(row => row.join(',')).join('\n');
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `saques-${new Date().toISOString()}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
+          onClick={exportCsv}
           disabled={withdrawals.length === 0}
         >
+          <Download className="h-4 w-4 mr-2" />
           Exportar CSV
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Requests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary" />
-              <p className="text-2xl font-bold">{stats.pendingWithdrawals}</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <StatCard
+          title="Pending Requests"
+          value={String(stats.pendingCount)}
+          description="Withdrawal requests waiting for review"
+          icon={Clock}
+        />
 
-        <Card className="bg-gradient-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Amount</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-primary" />
-              <p className="text-2xl font-bold">R$ {stats.totalPendingAmount.toLocaleString()}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Pending Amount"
+          value={formatMoney(stats.pendingAmount)}
+          description="Total amount requested"
+          icon={DollarSign}
+        />
 
-        <Card className="bg-gradient-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Paid Out</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              <p className="text-2xl font-bold">R$ {stats.totalPaidOut.toLocaleString()}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Paid Out"
+          value={formatMoney(stats.totalPaid)}
+          description="Withdrawals marked as paid"
+          icon={TrendingUp}
+        />
 
-        <Card className="bg-gradient-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active Creators</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              <p className="text-2xl font-bold">{stats.activeCreators}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Active Creators"
+          value={String(stats.activeCreators)}
+          description="Creators with withdrawal records"
+          icon={Users}
+        />
       </div>
 
-      {/* Pending Withdrawals Table */}
       <Card className="bg-gradient-card border-border">
         <CardHeader>
           <CardTitle>Pending Withdrawal Requests</CardTitle>
-          <CardDescription>Review and process creator withdrawal requests</CardDescription>
+          <CardDescription>
+            Review and process creator withdrawal requests.
+          </CardDescription>
         </CardHeader>
+
         <CardContent>
-          {withdrawals.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No pending withdrawals</p>
+          {pendingWithdrawals.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10">
+              No pending withdrawals
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Creator</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>PIX Key</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Requested</TableHead>
+                    <TableHead>PIX Key</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Requested</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
+
+                <TableBody>
+                  {pendingWithdrawals.map((withdrawal) => (
+                    <TableRow key={withdrawal.id}>
+                      <TableCell>
+                        <div className="font-medium">
+                          {withdrawal.creator_email ||
+                            withdrawal.creator_name ||
+                            "Unknown creator"}
+                        </div>
+                        <div className="text-xs text-muted-foreground max-w-[260px] truncate">
+                          {withdrawal.user_id}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right font-semibold">
+                        {formatMoney(withdrawal.amount)}
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="max-w-[240px] truncate">
+                          {withdrawal.pix_key || "No PIX key"}
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(withdrawal.status)}>
+                          {withdrawal.status || "unknown"}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>{formatDate(withdrawal.requested_at)}</TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isUpdatingId === withdrawal.id}
+                            onClick={() =>
+                              updateWithdrawalStatus(withdrawal, "approved")
+                            }
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isUpdatingId === withdrawal.id}
+                            onClick={() =>
+                              updateWithdrawalStatus(withdrawal, "paid")
+                            }
+                          >
+                            <Wallet className="h-4 w-4 mr-1" />
+                            Paid
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isUpdatingId === withdrawal.id}
+                            onClick={() =>
+                              updateWithdrawalStatus(withdrawal, "rejected")
+                            }
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gradient-card border-border">
+        <CardHeader>
+          <CardTitle>All Withdrawal Requests</CardTitle>
+          <CardDescription>
+            Full withdrawal history across creators.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {withdrawals.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10">
+              No withdrawal records yet
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Creator</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>PIX Key</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Requested</TableHead>
+                  </TableRow>
+                </TableHeader>
+
                 <TableBody>
                   {withdrawals.map((withdrawal) => (
                     <TableRow key={withdrawal.id}>
-                      <TableCell className="font-medium">
-                        {withdrawal.profiles?.full_name || 'Unknown'}
-                      </TableCell>
-                      <TableCell>{withdrawal.profiles?.email || 'N/A'}</TableCell>
-                      <TableCell className="font-mono text-sm">{withdrawal.pix_key}</TableCell>
-                      <TableCell className="text-right font-semibold text-primary">
-                        R$ {Number(withdrawal.amount).toLocaleString()}
-                      </TableCell>
                       <TableCell>
-                        {new Date(withdrawal.requested_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {withdrawal.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="default">
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Approve Withdrawal</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to approve this withdrawal of R$ {Number(withdrawal.amount).toLocaleString()} to {withdrawal.profiles?.full_name}?
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleApprove(withdrawal.id)}>
-                                  Approve
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="destructive">
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Reject Withdrawal</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to reject this withdrawal? The amount will be refunded to the creator's balance.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleReject(withdrawal.id)}>
-                                  Reject
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                        <div className="font-medium">
+                          {withdrawal.creator_email ||
+                            withdrawal.creator_name ||
+                            "Unknown creator"}
+                        </div>
+                        <div className="text-xs text-muted-foreground max-w-[260px] truncate">
+                          {withdrawal.user_id}
                         </div>
                       </TableCell>
+
+                      <TableCell className="text-right font-semibold">
+                        {formatMoney(withdrawal.amount)}
+                      </TableCell>
+
+                      <TableCell>{withdrawal.pix_key || "No PIX key"}</TableCell>
+
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(withdrawal.status)}>
+                          {withdrawal.status || "unknown"}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>{formatDate(withdrawal.requested_at)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

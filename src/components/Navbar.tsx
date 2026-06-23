@@ -9,7 +9,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 export const Navbar = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<NeonUser | null>(null);
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isLoading } = useUserRole();
 
   useEffect(() => {
     getNeonUser().then(setUser).catch(() => setUser(null));
@@ -20,33 +20,62 @@ export const Navbar = () => {
     navigate("/");
   };
 
+  const logoLink = user && isAdmin ? "/admin" : "/";
+
   return (
     <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-3">
+        <Link to={logoLink} className="flex items-center gap-3">
           <img src={sommaLogo} alt="Somma Media" className="h-8" />
         </Link>
-        
+
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              <Button variant="ghost" asChild>
-                <Link to="/">Home</Link>
-              </Button>
-              <Button variant="ghost" asChild>
-                <Link to="/campaigns">Campaigns</Link>
-              </Button>
-              <Button variant="ghost" asChild>
-                <Link to="/pages">Pages</Link>
-              </Button>
-              <Button variant="ghost" asChild>
-                <Link to="/wallet">Wallet</Link>
-              </Button>
-              {isAdmin && (
-                <Button variant="secondary" asChild>
-                  <Link to="/admin">Admin Console</Link>
-                </Button>
+              {!isLoading && isAdmin ? (
+                <>
+                  <Button variant="ghost" asChild>
+                    <Link to="/admin">Admin Dashboard</Link>
+                  </Button>
+
+                  <Button variant="ghost" asChild>
+                    <Link to="/admin/campaigns">Campaigns</Link>
+                  </Button>
+
+                  <Button variant="ghost" asChild>
+                    <Link to="/admin/submissions">Submissions</Link>
+                  </Button>
+
+                  <Button variant="ghost" asChild>
+                    <Link to="/admin/creators">Creators</Link>
+                  </Button>
+
+                  <Button variant="ghost" asChild>
+                    <Link to="/admin/wallet">Wallet</Link>
+                  </Button>
+                </>
+              ) : (
+                !isLoading && (
+                  <>
+                    <Button variant="ghost" asChild>
+                      <Link to="/">Home</Link>
+                    </Button>
+
+                    <Button variant="ghost" asChild>
+                      <Link to="/campaigns">Campaigns</Link>
+                    </Button>
+
+                    <Button variant="ghost" asChild>
+                      <Link to="/pages">Pages</Link>
+                    </Button>
+
+                    <Button variant="ghost" asChild>
+                      <Link to="/wallet">Wallet</Link>
+                    </Button>
+                  </>
+                )
               )}
+
               <Button variant="outline" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -57,6 +86,7 @@ export const Navbar = () => {
               <Button variant="ghost" asChild>
                 <Link to="/auth">Sign In</Link>
               </Button>
+
               <Button asChild>
                 <Link to="/auth">Get Started</Link>
               </Button>

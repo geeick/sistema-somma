@@ -1105,28 +1105,61 @@ app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(
       `
+      WITH page_stats AS (
+        SELECT
+          user_id::text AS user_id,
+          COUNT(*)::int AS page_count
+        FROM pages
+        GROUP BY user_id::text
+      ),
+      submission_stats AS (
+        SELECT
+          user_id::text AS user_id,
+          COUNT(*)::int AS submission_count,
+          COALESCE(SUM(COALESCE(views_count, 0)), 0)::bigint AS total_views,
+          COALESCE(SUM(COALESCE(payment_amount, 0)), 0)::numeric AS total_payout
+        FROM submissions
+        GROUP BY user_id::text
+      ),
+      profile_stats AS (
+        SELECT
+          id::text AS user_id,
+          COALESCE(total_earnings, 0)::numeric AS total_earnings,
+          pix_key,
+          created_at
+        FROM profiles
+      )
       SELECT
-        pr.id,
-        pr.role,
-        pr.total_earnings,
+        au.id::text AS id,
+        au.email AS email,
+        COALESCE(au.name, au.email) AS name,
+        COALESCE(au.role, 'user') AS role,
+        COALESCE(pr.total_earnings, ss.total_payout, 0)::numeric AS total_earnings,
         pr.pix_key,
-        pr.created_at,
-        COUNT(DISTINCT p.id)::int AS page_count,
-        COUNT(DISTINCT s.id)::int AS submission_count,
-        COALESCE(SUM(s.views_count), 0)::bigint AS total_views,
-        COALESCE(SUM(s.payment_amount), 0)::numeric AS total_payout
-      FROM profiles pr
-      LEFT JOIN pages p ON p.user_id = pr.id
-      LEFT JOIN submissions s ON s.user_id = pr.id
-      GROUP BY pr.id
-      ORDER BY pr.created_at DESC
+        COALESCE(pr.created_at, au."createdAt") AS created_at,
+        COALESCE(ps.page_count, 0)::int AS page_count,
+        COALESCE(ss.submission_count, 0)::int AS submission_count,
+        COALESCE(ss.total_views, 0)::bigint AS total_views,
+        COALESCE(ss.total_payout, 0)::numeric AS total_payout
+      FROM neon_auth."user" au
+      LEFT JOIN profile_stats pr
+        ON pr.user_id = au.id::text
+      LEFT JOIN page_stats ps
+        ON ps.user_id = au.id::text
+      LEFT JOIN submission_stats ss
+        ON ss.user_id = au.id::text
+      ORDER BY COALESCE(pr.created_at, au."createdAt") DESC NULLS LAST
       `
     );
 
     res.json({ data: result.rows });
   } catch (err) {
     console.error('Admin creators list error', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
@@ -1134,9 +1167,16 @@ app.get('/api/admin/pages', verifyToken, requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT p.*, pr.role AS owner_role
+      SELECT
+        p.*,
+        COALESCE(au.role, pr.role, 'creator') AS owner_role,
+        au.email AS owner_email,
+        COALESCE(au.name, au.email, p.user_id::text) AS owner_name
       FROM pages p
-      LEFT JOIN profiles pr ON pr.id = p.user_id
+      LEFT JOIN profiles pr
+        ON pr.id::text = p.user_id::text
+      LEFT JOIN neon_auth."user" au
+        ON au.id::text = p.user_id::text
       ORDER BY p.created_at DESC
       `
     );
@@ -1144,7 +1184,11 @@ app.get('/api/admin/pages', verifyToken, requireAdmin, async (_req, res) => {
     res.json({ data: result.rows });
   } catch (err) {
     console.error('Admin pages list error', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
