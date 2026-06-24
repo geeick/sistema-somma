@@ -37,7 +37,7 @@ type Withdrawal = {
   id: string;
   user_id: string;
   amount: number | string | null;
-  pix_key: string | null;
+  pix_key?: string | null;
   status: string | null;
   requested_at: string | null;
   creator_email?: string | null;
@@ -73,8 +73,13 @@ async function adminRequest(path: string, options: RequestInit = {}) {
   return json?.data;
 }
 
+function toNumber(value?: number | string | null) {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num : 0;
+}
+
 function formatMoney(value?: number | string | null) {
-  return `R$ ${Number(value || 0).toLocaleString("pt-BR", {
+  return `R$ ${toNumber(value).toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -84,6 +89,7 @@ function formatDate(value?: string | null) {
   if (!value) return "Not set";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not set";
 
   return date.toLocaleDateString("pt-BR");
@@ -115,6 +121,7 @@ function StatCard({
         </CardTitle>
         <Icon className="h-4 w-4 text-primary" />
       </CardHeader>
+
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
         <p className="text-xs text-muted-foreground mt-1">{description}</p>
@@ -125,6 +132,7 @@ function StatCard({
 
 export default function WalletAdmin() {
   const { toast } = useToast();
+
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingId, setIsUpdatingId] = useState<string | null>(null);
@@ -138,6 +146,7 @@ export default function WalletAdmin() {
 
     try {
       const data = await adminRequest("/api/admin/withdrawals");
+
       setRawResponse(data);
       setWithdrawals(Array.isArray(data) ? data : []);
     } catch (err: any) {
@@ -160,21 +169,23 @@ export default function WalletAdmin() {
   }, []);
 
   const stats = useMemo(() => {
-    const pending = withdrawals.filter((item) => item.status === "requested" || item.status === "pending");
+    const pending = withdrawals.filter((item) =>
+      ["requested", "pending"].includes(item.status || "")
+    );
+
     const paid = withdrawals.filter((item) => item.status === "paid");
+
     const activeCreatorIds = new Set(
-      withdrawals
-        .map((item) => item.user_id)
-        .filter(Boolean)
+      withdrawals.map((item) => item.user_id).filter(Boolean)
     );
 
     const pendingAmount = pending.reduce(
-      (sum, item) => sum + Number(item.amount || 0),
+      (sum, item) => sum + toNumber(item.amount),
       0
     );
 
     const totalPaid = paid.reduce(
-      (sum, item) => sum + Number(item.amount || 0),
+      (sum, item) => sum + toNumber(item.amount),
       0
     );
 
@@ -186,26 +197,27 @@ export default function WalletAdmin() {
     };
   }, [withdrawals]);
 
-  const pendingWithdrawals = useMemo(
-    () =>
-      withdrawals
-        .filter((item) => item.status === "requested" || item.status === "pending")
-        .sort(
-          (a, b) =>
-            new Date(b.requested_at || 0).getTime() -
-            new Date(a.requested_at || 0).getTime()
-        ),
-    [withdrawals]
-  );
+  const pendingWithdrawals = useMemo(() => {
+    return withdrawals
+      .filter((item) => ["requested", "pending"].includes(item.status || ""))
+      .sort(
+        (a, b) =>
+          new Date(b.requested_at || 0).getTime() -
+          new Date(a.requested_at || 0).getTime()
+      );
+  }, [withdrawals]);
 
   const updateWithdrawalStatus = async (withdrawal: Withdrawal, status: string) => {
     setIsUpdatingId(withdrawal.id);
 
     try {
-      const updated = await adminRequest(`/api/admin/withdrawals/${withdrawal.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
+      const updated = await adminRequest(
+        `/api/admin/withdrawals/${withdrawal.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        }
+      );
 
       setWithdrawals((current) =>
         current.map((item) =>
@@ -231,7 +243,7 @@ export default function WalletAdmin() {
 
   const exportCsv = () => {
     const rows = [
-      ["ID", "Creator", "User ID", "Amount", "PIX Key", "Status", "Requested At"],
+      ["ID", "Creator", "User ID", "Amount", "PIX Hint", "Status", "Requested At"],
       ...withdrawals.map((withdrawal) => [
         withdrawal.id,
         withdrawal.creator_email || withdrawal.creator_name || withdrawal.user_id || "",
@@ -246,7 +258,7 @@ export default function WalletAdmin() {
     const csv = rows
       .map((row) =>
         row
-          .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
+          .map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`)
           .join(",")
       )
       .join("\n");
@@ -254,9 +266,11 @@ export default function WalletAdmin() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
+
     a.href = url;
     a.download = `withdrawals-${new Date().toISOString()}.csv`;
     a.click();
+
     URL.revokeObjectURL(url);
   };
 
@@ -300,7 +314,7 @@ export default function WalletAdmin() {
 
             <p className="text-sm text-muted-foreground">
               If this says Backend returned 500, update the backend
-              /api/admin/withdrawals route.
+              /api/admin/withdrawals route so it returns masked PIX data only.
             </p>
           </CardContent>
         </Card>
@@ -378,7 +392,7 @@ export default function WalletAdmin() {
                   <TableRow>
                     <TableHead>Creator</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>PIX Key</TableHead>
+                    <TableHead>PIX Hint</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Requested</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -405,7 +419,7 @@ export default function WalletAdmin() {
 
                       <TableCell>
                         <div className="max-w-[240px] truncate">
-                          {withdrawal.pix_key || "No PIX key"}
+                          {withdrawal.pix_key || "Stored securely"}
                         </div>
                       </TableCell>
 
@@ -485,7 +499,7 @@ export default function WalletAdmin() {
                   <TableRow>
                     <TableHead>Creator</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>PIX Key</TableHead>
+                    <TableHead>PIX Hint</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Requested</TableHead>
                   </TableRow>
@@ -509,7 +523,9 @@ export default function WalletAdmin() {
                         {formatMoney(withdrawal.amount)}
                       </TableCell>
 
-                      <TableCell>{withdrawal.pix_key || "No PIX key"}</TableCell>
+                      <TableCell>
+                        {withdrawal.pix_key || "Stored securely"}
+                      </TableCell>
 
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(withdrawal.status)}>
@@ -529,3 +545,4 @@ export default function WalletAdmin() {
     </div>
   );
 }
+

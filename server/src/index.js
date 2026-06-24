@@ -5,10 +5,10 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { Pool } = require('pg');
-const { chromium } = require('playwright');
 
 // Load the project's root .env.local when running from the server folder.
 dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
 app.use(cors());
@@ -102,150 +102,6 @@ function parseAndVerifyOAuthState(state) {
   }
 
   return parsed;
-}
-
-function computePayoutFromPlays(plays) {
-  const count = Number(plays || 0);
-
-  if (count <= 0) return 0;
-  if (count < 1000) return 5;
-  if (count < 5000) return 10;
-  if (count < 25000) return 20;
-  if (count < 50000) return 50;
-  if (count < 100000) return 70;
-  if (count < 250000) return 100;
-  if (count < 500000) return 150;
-  if (count < 1000000) return 200;
-
-  return 250;
-}
-
-function parseCompactNumber(value) {
-  if (!value) return 0;
-
-  const cleaned = String(value)
-    .trim()
-    .replace(/,/g, "")
-    .replace(/\s+/g, "")
-    .toUpperCase();
-
-  const match = cleaned.match(/^(\d+(\.\d+)?)([KMB])?$/);
-
-  if (!match) {
-    const plain = Number(cleaned.replace(/[^\d.]/g, ""));
-    return Number.isFinite(plain) ? Math.round(plain) : 0;
-  }
-
-  const number = Number(match[1]);
-  const suffix = match[3];
-
-  if (!Number.isFinite(number)) return 0;
-
-  if (suffix === "K") return Math.round(number * 1000);
-  if (suffix === "M") return Math.round(number * 1000000);
-  if (suffix === "B") return Math.round(number * 1000000000);
-
-  return Math.round(number);
-}
-
-function findNumberByPatterns(text, patterns) {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) {
-      return parseCompactNumber(match[1]);
-    }
-  }
-
-  return 0;
-}
-
-function findUsername(text, title, postUrl) {
-  const titleMatch = title.match(/^(.+?) on Instagram/i);
-  if (titleMatch?.[1]) return titleMatch[1].trim().replace(/^@/, "");
-
-  const atMatch = text.match(/@([a-zA-Z0-9._]+)/);
-  if (atMatch?.[1]) return atMatch[1];
-
-  try {
-    const url = new URL(postUrl);
-    const parts = url.pathname.split("/").filter(Boolean);
-
-    if (parts.length > 0 && !["reel", "p", "tv"].includes(parts[0])) {
-      return parts[0].replace(/^@/, "");
-    }
-  } catch (_err) {
-    return "";
-  }
-
-  return "";
-}
-
-async function scrapeInstagramMetrics(postUrl) {
-  if (!postUrl) {
-    throw new Error("Missing post URL");
-  }
-
-  const browser = await chromium.launch({
-    headless: true,
-  });
-
-  try {
-    const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      locale: "en-US",
-    });
-
-    const page = await context.newPage();
-
-    await page.goto(postUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 45000,
-    });
-
-    await page.waitForTimeout(5000);
-
-    const title = await page.title().catch(() => "");
-    const bodyText = await page.locator("body").innerText({ timeout: 10000 }).catch(() => "");
-    const html = await page.content().catch(() => "");
-
-    const combined = `${title}\n${bodyText}\n${html}`;
-
-    const username = findUsername(combined, title, postUrl);
-
-    const likes = findNumberByPatterns(combined, [
-      /"like_count"\s*:\s*(\d+)/i,
-      /"edge_media_preview_like"\s*:\s*\{\s*"count"\s*:\s*(\d+)/i,
-      /([\d,.]+[KMB]?)\s+likes/i,
-      /liked by\s+([\d,.]+[KMB]?)/i,
-    ]);
-
-    const plays = findNumberByPatterns(combined, [
-      /"play_count"\s*:\s*(\d+)/i,
-      /"video_view_count"\s*:\s*(\d+)/i,
-      /"view_count"\s*:\s*(\d+)/i,
-      /([\d,.]+[KMB]?)\s+plays/i,
-      /([\d,.]+[KMB]?)\s+views/i,
-    ]);
-
-    return {
-      username,
-      likes,
-      plays,
-    };
-  } finally {
-    await browser.close();
-  }
-}
-
-async function scrapePostMetrics(postUrl) {
-  const url = String(postUrl || "").toLowerCase();
-
-  if (url.includes("instagram.com")) {
-    return scrapeInstagramMetrics(postUrl);
-  }
-
-  throw new Error("Only Instagram scraping is supported right now");
 }
 
 async function readJsonResponse(response) {
@@ -398,42 +254,212 @@ function dateOrNull(value) {
   return Number.isNaN(date.getTime()) ? null : value;
 }
 
-async function scrapePostMetrics(postUrl) {
-  if (!postUrl) {
-    throw new Error('Missing post URL');
-  }
 
-  const scraperUrl = process.env.SCRAPER_API_URL;
 
-  if (!scraperUrl) {
-    throw new Error('SCRAPER_API_URL is not set in .env.local');
-  }
+function computePayoutFromPlays(plays) {
+  const count = Number(plays || 0);
 
-  const response = await fetch(
-    `${scraperUrl}?url=${encodeURIComponent(postUrl)}`,
-    process.env.SCRAPER_API_KEY
-      ? {
-          headers: {
-            Authorization: `Bearer ${process.env.SCRAPER_API_KEY}`,
-          },
-        }
-      : undefined
-  );
+  if (count <= 0) return 0;
+  if (count < 1000) return 5;
+  if (count < 5000) return 10;
+  if (count < 25000) return 20;
+  if (count < 50000) return 50;
+  if (count < 100000) return 70;
+  if (count < 250000) return 100;
+  if (count < 500000) return 150;
+  if (count < 1000000) return 200;
 
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(data?.error || data?.message || 'Scraper failed');
-  }
-
-  return {
-    username: String(data?.username || data?.userName || '').trim(),
-    likes: Number(data?.likes || data?.like_count || 0),
-    plays: Number(data?.plays || data?.views || data?.view_count || 0),
-  };
+  return 250;
 }
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+function parseMetricNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Math.round(value) : 0;
+  }
+
+  let raw = String(value).trim();
+
+  if (!raw) return 0;
+
+  raw = raw.replace(/\s+/g, '').toUpperCase();
+
+  const compact = raw.match(/^(\d+(?:[.,]\d+)?)([KMB])$/);
+  if (compact) {
+    const base = Number(compact[1].replace(',', '.'));
+    if (!Number.isFinite(base)) return 0;
+    if (compact[2] === 'K') return Math.round(base * 1000);
+    if (compact[2] === 'M') return Math.round(base * 1000000);
+    if (compact[2] === 'B') return Math.round(base * 1000000000);
+  }
+
+  // Treat 384.444 or 384,444 as thousands separators when exactly three digits follow.
+  if (/^\d{1,3}([.,]\d{3})+$/.test(raw)) {
+    return Number(raw.replace(/[.,]/g, ''));
+  }
+
+  const normalized = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+}
+
+function normalizeUrlForMatch(url) {
+  return String(url || '')
+    .trim()
+    .replace(/\?.*$/, '')
+    .replace(/#.*$/, '')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
+function instagramShortcode(url) {
+  const text = String(url || '').trim();
+
+  const match = text.match(/instagram\.com\/(?:reel|p|tv)\/([^/?#]+)/i);
+
+  if (match && match[1]) {
+    return match[1].toLowerCase();
+  }
+
+  return '';
+}
+
+function urlsMatch(a, b) {
+  const left = normalizeUrlForMatch(a);
+  const right = normalizeUrlForMatch(b);
+
+  if (!left || !right) return false;
+
+  const leftCode = instagramShortcode(left);
+  const rightCode = instagramShortcode(right);
+
+  if (leftCode && rightCode) {
+    return leftCode === rightCode;
+  }
+
+  return left === right || left.includes(right) || right.includes(left);
+}
+
+async function sendSubmissionToGoogleSheet(postUrl, musicTitle) {
+  const sheetUrl = process.env.GOOGLE_SHEETS_SCRAPER_URL;
+
+  if (!sheetUrl) {
+    console.warn('GOOGLE_SHEETS_SCRAPER_URL is not set. Skipping Google Sheet enqueue.');
+    return null;
+  }
+
+  const response = await fetch(sheetUrl, {
+    method: 'POST',
+    headers: {
+      // Apps Script web apps are more reliable with text/plain than application/json.
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
+    body: JSON.stringify({
+      postLink: postUrl,
+      link: postUrl,
+      musica: musicTitle || '',
+    }),
+  });
+
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok || json?.status === 'error') {
+    throw new Error(json?.message || 'Google Sheet scraper doPost failed');
+  }
+
+  return json;
+}
+
+async function fetchGoogleSheetMetrics() {
+  const sheetUrl = process.env.GOOGLE_SHEETS_SCRAPER_URL;
+
+  if (!sheetUrl) {
+    throw new Error('GOOGLE_SHEETS_SCRAPER_URL is not set in .env.local');
+  }
+
+  const response = await fetch(sheetUrl);
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(`Google Sheet scraper doGet failed with status ${response.status}`);
+  }
+
+  if (!Array.isArray(json)) {
+    throw new Error(`Google Sheet scraper returned non-array JSON: ${JSON.stringify(json)}`);
+  }
+
+  return json.map((row) => ({
+    url: String(row.url || row.postLink || row.link || '').trim(),
+    username: String(row.username || row.userName || '').trim(),
+    full_name: String(row.full_name || row.fullName || ''),
+    caption: String(row.caption || ''),
+    likes: parseMetricNumber(row.likes || row.like_count || row.likeCount),
+    plays: parseMetricNumber(row.plays || row.views || row.view_count || row.viewCount || row.video_view_count),
+    comments: parseMetricNumber(row.comments || row.comment_count || row.commentCount),
+    music_title: String(row.music_title || row.musicTitle || ''),
+    music_artist: String(row.music_artist || row.musicArtist || ''),
+    photo_url: String(row.photo_url || row.photoUrl || ''),
+    video_url: String(row.video_url || row.videoUrl || ''),
+    taken_at: String(row.taken_at || row.takenAt || ''),
+  }));
+}
+
+async function requestGoogleSheetScrapeAndGetMetrics(postUrl, musicTitle) {
+  const sheetUrl = process.env.GOOGLE_SHEETS_SCRAPER_URL;
+
+  if (!sheetUrl) {
+    throw new Error('GOOGLE_SHEETS_SCRAPER_URL is not set in .env.local');
+  }
+
+  const response = await fetch(sheetUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
+    body: JSON.stringify({
+      postLink: postUrl,
+      link: postUrl,
+      musica: musicTitle || '',
+      wait: true,
+    }),
+  });
+
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok || !json) {
+    throw new Error('Google Sheet scraper request failed');
+  }
+
+  if (json.status === 'error') {
+    throw new Error(json.message || 'Google Sheet scraper returned an error');
+  }
+
+  if (json.status === 'ready' && json.data) {
+    return {
+      url: String(json.data.url || '').trim(),
+      username: String(json.data.username || '').trim(),
+      likes: parseMetricNumber(json.data.likes),
+      plays: parseMetricNumber(json.data.plays || json.data.views),
+      comments: parseMetricNumber(json.data.comments),
+      music_title: String(json.data.music_title || ''),
+      music_artist: String(json.data.music_artist || ''),
+      photo_url: String(json.data.photo_url || ''),
+      video_url: String(json.data.video_url || ''),
+      taken_at: String(json.data.taken_at || ''),
+    };
+  }
+
+  const rows = await fetchGoogleSheetMetrics();
+  const found = rows.find((row) => urlsMatch(postUrl, row.url));
+
+  if (found) {
+    return found;
+  }
+
+  throw new Error('Link was added to input, but output is not ready yet. Try Sync Metrics again later.');
+}
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -548,9 +574,7 @@ app.get('/api/profile', verifyToken, async (req, res) => {
       data: profile
         ? {
             total_earnings: profile.total_earnings,
-            pix_key: profile.pix_key_last4
-              ? `•••• ${profile.pix_key_last4}`
-              : null,
+            pix_key: profile.pix_key_last4 ? `**** ${profile.pix_key_last4}` : null,
           }
         : {
             total_earnings: 0,
@@ -620,6 +644,123 @@ app.post('/api/withdrawals', verifyToken, async (req, res) => {
     console.error('Withdrawal create error', err);
     res.status(500).json({
       error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
+  }
+});
+
+
+app.post('/api/submissions', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { campaign_id, page_id, post_url } = req.body;
+
+    if (!campaign_id || !page_id || !post_url) {
+      return res.status(400).json({
+        error: 'Campaign, approved page, and post URL are required',
+      });
+    }
+
+    const pageResult = await pool.query(
+      `
+      SELECT id, user_id, platform, handle, verified
+      FROM pages
+      WHERE id::text = $1
+        AND user_id::text = $2
+        AND verified IS TRUE
+      LIMIT 1
+      `,
+      [String(page_id), String(userId)]
+    );
+
+    const page = pageResult.rows[0];
+
+    if (!page) {
+      return res.status(400).json({
+        error: 'You can only submit content from one of your approved pages',
+      });
+    }
+
+    const campaignResult = await pool.query(
+      `
+      SELECT id, title, status, end_date, platforms, audio_url
+      FROM campaigns
+      WHERE id::text = $1
+      LIMIT 1
+      `,
+      [String(campaign_id)]
+    );
+
+    const campaign = campaignResult.rows[0];
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    if (campaign.status !== 'active') {
+      return res.status(400).json({
+        error: 'This campaign is not currently active',
+      });
+    }
+
+    if (campaign.end_date && new Date(campaign.end_date) < new Date()) {
+      return res.status(400).json({
+        error: 'This campaign has ended',
+      });
+    }
+
+    const allowedPlatforms = Array.isArray(campaign.platforms)
+      ? campaign.platforms
+      : normalizeArray(campaign.platforms);
+
+    if (
+      allowedPlatforms.length > 0 &&
+      !allowedPlatforms.includes(page.platform)
+    ) {
+      return res.status(400).json({
+        error: `This campaign does not accept ${page.platform} submissions`,
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO submissions(
+        user_id,
+        campaign_id,
+        page_id,
+        title,
+        platform,
+        post_url,
+        status,
+        audio_verified,
+        uploaded_at,
+        created_at
+      )
+      VALUES($1,$2,$3,$4,$5,$6,'pending',false,now(),now())
+      RETURNING *
+      `,
+      [
+        userId,
+        campaign.id,
+        page.id,
+        `${campaign.title || 'Campaign'} - Submission`,
+        page.platform,
+        post_url,
+      ]
+    );
+
+    const inserted = result.rows[0];
+
+    sendSubmissionToGoogleSheet(post_url, campaign.title).catch((err) => {
+      console.error('Google Sheet scraper enqueue failed', err);
+    });
+
+    res.json({ data: inserted });
+  } catch (err) {
+    console.error('Submission create error', err);
+    res.status(500).json({
+      error: 'Failed to create submission',
       details: err.message,
       code: err.code,
     });
@@ -1279,12 +1420,12 @@ app.get('/api/admin/submissions', verifyToken, requireAdmin, async (req, res) =>
     const where = [];
 
     if (campaign_id) {
-      values.push(campaign_id);
-      where.push(`s.campaign_id = $${values.length}`);
+      values.push(String(campaign_id));
+      where.push(`s.campaign_id::text = $${values.length}`);
     }
 
-    if (status) {
-      values.push(status);
+    if (status && status !== 'all') {
+      values.push(String(status));
       where.push(`s.status = $${values.length}`);
     }
 
@@ -1296,11 +1437,27 @@ app.get('/api/admin/submissions', verifyToken, requireAdmin, async (req, res) =>
         p.platform AS page_platform,
         p.follower_count AS page_follower_count,
         p.verified AS page_verified,
-        pr.role AS creator_role
+        au.email AS creator_email,
+        COALESCE(au.name, au.email, s.user_id::text) AS creator_name,
+        COALESCE(au.role, pr.role, 'creator') AS creator_role
       FROM submissions s
-      LEFT JOIN campaigns c ON c.id = s.campaign_id
-      LEFT JOIN pages p ON p.id = s.page_id OR (p.user_id = s.user_id AND p.platform = s.platform)
-      LEFT JOIN profiles pr ON pr.id = s.user_id
+      LEFT JOIN campaigns c
+        ON c.id::text = s.campaign_id::text
+      LEFT JOIN LATERAL (
+        SELECT handle, platform, follower_count, verified
+        FROM pages p
+        WHERE p.user_id::text = s.user_id::text
+          AND (
+            p.id::text = COALESCE(s.page_id::text, '')
+            OR p.platform = s.platform
+          )
+        ORDER BY p.created_at DESC
+        LIMIT 1
+      ) p ON true
+      LEFT JOIN profiles pr
+        ON pr.id::text = s.user_id::text
+      LEFT JOIN neon_auth."user" au
+        ON au.id::text = s.user_id::text
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY COALESCE(s.uploaded_at, s.created_at) DESC
     `;
@@ -1309,13 +1466,17 @@ app.get('/api/admin/submissions', verifyToken, requireAdmin, async (req, res) =>
     res.json({ data: result.rows });
   } catch (err) {
     console.error('Admin submissions list error', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
 app.patch('/api/admin/submissions/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { status, views_count, payment_amount, audio_verified } = req.body;
+    const { status, views_count, likes_count, payment_amount, audio_verified } = req.body;
 
     const result = await pool.query(
       `
@@ -1323,8 +1484,9 @@ app.patch('/api/admin/submissions/:id', verifyToken, requireAdmin, async (req, r
       SET
         status = COALESCE($2, status),
         views_count = COALESCE($3, views_count),
-        payment_amount = COALESCE($4, payment_amount),
-        audio_verified = COALESCE($5, audio_verified)
+        likes_count = COALESCE($4, likes_count),
+        payment_amount = COALESCE($5, payment_amount),
+        audio_verified = COALESCE($6, audio_verified)
       WHERE id = $1
       RETURNING *
       `,
@@ -1332,6 +1494,7 @@ app.patch('/api/admin/submissions/:id', verifyToken, requireAdmin, async (req, r
         req.params.id,
         status || null,
         views_count === undefined ? null : Number(views_count),
+        likes_count === undefined ? null : Number(likes_count),
         payment_amount === undefined ? null : Number(payment_amount),
         audio_verified === undefined ? null : Boolean(audio_verified),
       ]
@@ -1340,9 +1503,142 @@ app.patch('/api/admin/submissions/:id', verifyToken, requireAdmin, async (req, r
     res.json({ data: result.rows[0] || null });
   } catch (err) {
     console.error('Admin submission update error', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
+
+app.patch('/api/admin/submissions/:id/metrics', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { username, likes, plays } = req.body;
+
+    const likesCount = parseMetricNumber(likes);
+    const playsCount = parseMetricNumber(plays);
+    const payout = computePayoutFromPlays(playsCount);
+
+    const result = await pool.query(
+      `
+      UPDATE submissions
+      SET
+        username = $2,
+        likes_count = $3,
+        views_count = $4,
+        payment_amount = $5,
+        metrics_synced_at = now(),
+        metrics_source = 'manual'
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        req.params.id,
+        username || null,
+        likesCount,
+        playsCount,
+        payout,
+      ]
+    );
+
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    console.error('Manual metrics update error', err);
+    res.status(500).json({
+      error: 'Failed to update metrics',
+      details: err.message,
+      code: err.code,
+    });
+  }
+});
+
+app.post('/api/admin/submissions/:id/sync-metrics', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const submissionResult = await pool.query(
+      `
+      SELECT
+        s.id,
+        s.post_url,
+        c.title AS campaign_title
+      FROM submissions s
+      LEFT JOIN campaigns c
+        ON c.id::text = s.campaign_id::text
+      WHERE s.id = $1
+      LIMIT 1
+      `,
+      [req.params.id]
+    );
+
+    const submission = submissionResult.rows[0];
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    if (!submission.post_url) {
+      return res.status(400).json({ error: 'Submission has no post URL' });
+    }
+
+    const metric = await requestGoogleSheetScrapeAndGetMetrics(
+      submission.post_url,
+      submission.campaign_title
+    );
+
+    const payout = computePayoutFromPlays(metric.plays);
+
+    const updateResult = await pool.query(
+      `
+      UPDATE submissions
+      SET
+        username = $2,
+        likes_count = $3,
+        views_count = $4,
+        payment_amount = $5,
+        metrics_synced_at = now(),
+        metrics_source = 'google_sheets'
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        submission.id,
+        metric.username || null,
+        metric.likes,
+        metric.plays,
+        payout,
+      ]
+    );
+
+    res.json({ data: updateResult.rows[0] });
+  } catch (err) {
+    console.error('Google Sheets sync metrics error', err);
+    res.status(500).json({
+      error: 'Failed to sync metrics from Google Sheets',
+      details: err.message,
+      code: err.code,
+    });
+  }
+});
+
+app.get('/api/admin/google-sheets-metrics', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const rows = await fetchGoogleSheetMetrics();
+
+    res.json({
+      data: {
+        count: rows.length,
+        rows,
+      },
+    });
+  } catch (err) {
+    console.error('Google Sheets metrics debug error', err);
+    res.status(500).json({
+      error: 'Failed to fetch Google Sheet metrics',
+      details: err.message,
+      code: err.code,
+    });
+  }
+});
+
 
 app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
   try {
@@ -1379,10 +1675,10 @@ app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
         COALESCE(au.role, 'user') AS role,
         COALESCE(pr.total_earnings, ss.total_payout, 0)::numeric AS total_earnings,
         CASE
-        WHEN pr.pix_key_last4 IS NOT NULL THEN '**** ' || pr.pix_key_last4
+          WHEN pr.pix_key_last4 IS NOT NULL THEN '**** ' || pr.pix_key_last4
           ELSE NULL
         END AS pix_key,
-        COALESCE(pr.created_at, au."createdAt") AS created_at,
+        pr.created_at AS created_at,
         COALESCE(ps.page_count, 0)::int AS page_count,
         COALESCE(ss.submission_count, 0)::int AS submission_count,
         COALESCE(ss.total_views, 0)::bigint AS total_views,
@@ -1394,7 +1690,7 @@ app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
         ON ps.user_id = au.id::text
       LEFT JOIN submission_stats ss
         ON ss.user_id = au.id::text
-      ORDER BY COALESCE(pr.created_at, au."createdAt") DESC NULLS LAST
+      ORDER BY pr.created_at DESC NULLS LAST
       `
     );
 
@@ -1413,16 +1709,9 @@ app.get('/api/admin/pages', verifyToken, requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT
-        p.*,
-        COALESCE(au.role, pr.role, 'creator') AS owner_role,
-        au.email AS owner_email,
-        COALESCE(au.name, au.email, p.user_id::text) AS owner_name
+      SELECT p.*, pr.role AS owner_role
       FROM pages p
-      LEFT JOIN profiles pr
-        ON pr.id::text = p.user_id::text
-      LEFT JOIN neon_auth."user" au
-        ON au.id::text = p.user_id::text
+      LEFT JOIN profiles pr ON pr.id = p.user_id
       ORDER BY p.created_at DESC
       `
     );
@@ -1430,11 +1719,7 @@ app.get('/api/admin/pages', verifyToken, requireAdmin, async (_req, res) => {
     res.json({ data: result.rows });
   } catch (err) {
     console.error('Admin pages list error', err);
-    res.status(500).json({
-      error: 'DB error',
-      details: err.message,
-      code: err.code,
-    });
+    res.status(500).json({ error: 'DB error' });
   }
 });
 
@@ -1477,7 +1762,7 @@ app.get('/api/admin/withdrawals', verifyToken, requireAdmin, async (_req, res) =
         au.email AS creator_email,
         COALESCE(au.name, au.email, w.user_id::text) AS creator_name,
         CASE
-          WHEN pr.pix_key_last4 IS NOT NULL THEN '•••• ' || pr.pix_key_last4
+          WHEN pr.pix_key_last4 IS NOT NULL THEN '**** ' || pr.pix_key_last4
           ELSE NULL
         END AS pix_key
       FROM withdrawals w
@@ -1590,158 +1875,15 @@ app.delete('/api/admin/tags/:id', verifyToken, requireAdmin, async (req, res) =>
 
 
 // Sheets metrics endpoint (placeholder) — returns empty array unless you implement fetching logic
-app.get('/api/sheets/metrics', async (req, res) => {
-  res.json({ status: 'success', data: [] });
-});
-
-app.post('/api/submissions', verifyToken, async (req, res) => {
+app.get('/api/sheets/metrics', async (_req, res) => {
   try {
-    const userId = req.user.sub;
-    const { campaign_id, page_id, post_url, audio_url } = req.body;
-
-    if (!campaign_id || !page_id || !post_url) {
-      return res.status(400).json({
-        error: 'Campaign, approved page, and post URL are required',
-      });
-    }
-
-    const pageResult = await pool.query(
-      `
-      SELECT id, user_id, platform, handle, verified
-      FROM pages
-      WHERE id::text = $1
-        AND user_id::text = $2
-        AND verified IS TRUE
-      LIMIT 1
-      `,
-      [String(page_id), String(userId)]
-    );
-
-    const page = pageResult.rows[0];
-
-    if (!page) {
-      return res.status(400).json({
-        error: 'You can only submit content from one of your approved pages',
-      });
-    }
-
-    const campaignResult = await pool.query(
-      `
-      SELECT id, title, status, end_date, platforms, audio_url
-      FROM campaigns
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [campaign_id]
-    );
-
-    const campaign = campaignResult.rows[0];
-
-    if (!campaign) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
-
-    if (campaign.status !== 'active') {
-      return res.status(400).json({
-        error: 'This campaign is not currently active',
-      });
-    }
-
-    if (campaign.end_date && new Date(campaign.end_date) < new Date()) {
-      return res.status(400).json({
-        error: 'This campaign has ended',
-      });
-    }
-
-    const allowedPlatforms = Array.isArray(campaign.platforms)
-      ? campaign.platforms
-      : [];
-
-    if (
-      allowedPlatforms.length > 0 &&
-      !allowedPlatforms.includes(page.platform)
-    ) {
-      return res.status(400).json({
-        error: `This campaign does not accept ${page.platform} submissions`,
-      });
-    }
-
-    const audioVerified = !campaign.audio_url;
-
-    const result = await pool.query(
-      `
-      INSERT INTO submissions(
-        user_id,
-        campaign_id,
-        page_id,
-        title,
-        platform,
-        post_url,
-        status,
-        audio_verified,
-        uploaded_at,
-        created_at
-      )
-      VALUES($1,$2,$3,$4,$5,$6,'pending',$7,now(),now())
-      RETURNING *
-      `,
-      [
-        userId,
-        campaign.id,
-        page.id,
-        `${campaign.title || 'Campaign'} - Submission`,
-        page.platform,
-        post_url,
-        audioVerified,
-      ]
-    );
-
-    res.json({ data: result.rows[0] });
+    const rows = await fetchGoogleSheetMetrics();
+    res.json({ status: 'success', data: rows });
   } catch (err) {
-    console.error('Submission create error', err);
+    console.error('Sheets metrics endpoint error', err);
     res.status(500).json({
-      error: 'Failed to create submission',
-      details: err.message,
-      code: err.code,
-    });
-  }
-});
-
-app.patch('/api/admin/submissions/:id/metrics', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { username, likes, plays } = req.body;
-
-    const likesCount = Number(likes || 0);
-    const playsCount = Number(plays || 0);
-    const payout = computePayoutFromPlays(playsCount);
-
-    const result = await pool.query(
-      `
-      UPDATE submissions
-      SET
-        username = $2,
-        likes_count = $3,
-        views_count = $4,
-        payment_amount = $5,
-        metrics_synced_at = now(),
-        metrics_source = 'manual'
-      WHERE id = $1
-      RETURNING *
-      `,
-      [
-        req.params.id,
-        username || null,
-        likesCount,
-        playsCount,
-        payout,
-      ]
-    );
-
-    res.json({ data: result.rows[0] || null });
-  } catch (err) {
-    console.error('Manual metrics update error', err);
-    res.status(500).json({
-      error: 'Failed to update metrics',
+      status: 'error',
+      error: 'Failed to fetch Google Sheet metrics',
       details: err.message,
       code: err.code,
     });
