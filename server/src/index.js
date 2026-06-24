@@ -1639,6 +1639,58 @@ app.get('/api/admin/google-sheets-metrics', verifyToken, requireAdmin, async (_r
   }
 });
 
+app.get('/api/tiktok/videos', verifyToken, async (req, res) => {
+  try {
+    const { accessToken } = await getValidTikTokAccessTokenForUser(req.user.sub);
+
+    const fields = [
+      'id',
+      'create_time',
+      'cover_image_url',
+      'share_url',
+      'video_description',
+      'duration',
+      'title',
+      'embed_link',
+      'like_count',
+      'comment_count',
+      'share_count',
+      'view_count',
+    ].join(',');
+
+    const response = await fetch(
+      `https://open.tiktokapis.com/v2/video/list/?fields=${encodeURIComponent(fields)}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          max_count: 20,
+        }),
+      }
+    );
+
+    const json = await response.json();
+
+    if (!response.ok || json.error?.code !== 'ok') {
+      throw new Error(json.error?.message || 'TikTok video list failed');
+    }
+
+    res.json({
+      data: json.data.videos || [],
+      cursor: json.data.cursor || null,
+      has_more: json.data.has_more || false,
+    });
+  } catch (err) {
+    console.error('TikTok videos error', err);
+    res.status(500).json({
+      error: 'Failed to load TikTok videos',
+      details: err.message,
+    });
+  }
+});
 
 app.get('/api/admin/creators', verifyToken, requireAdmin, async (_req, res) => {
   try {
