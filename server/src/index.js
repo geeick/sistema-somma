@@ -61,6 +61,29 @@ function encryptToken(token) {
   ].join('.');
 }
 
+function decryptToken(payload) {
+  if (!payload) return null;
+
+  const [ivRaw, tagRaw, encryptedRaw] = String(payload).split('.');
+
+  if (!ivRaw || !tagRaw || !encryptedRaw) {
+    return null;
+  }
+
+  const key = getTokenEncryptionKey();
+  const iv = Buffer.from(ivRaw, 'base64url');
+  const tag = Buffer.from(tagRaw, 'base64url');
+  const encrypted = Buffer.from(encryptedRaw, 'base64url');
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+
+  return Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final(),
+  ]).toString('utf8');
+}
+
 function signStateBody(body) {
   return crypto
     .createHmac('sha256', getStateSecret())
@@ -342,6 +365,44 @@ function urlsMatch(a, b) {
   return left === right || left.includes(right) || right.includes(left);
 }
 
+
+function normalizePageHandle(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  const withoutAt = raw.replace(/^@+/, '').replace(/\s+/g, '');
+  return withoutAt ? `@${withoutAt}` : '';
+}
+
+function normalizePageUrl(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, '')
+    .replace(/\?.*$/, '')
+    .replace(/#.*$/, '')
+    .replace(/\/+$/, '');
+}
+
+function getPageDedupeKey(platform, pageLike = {}) {
+  const cleanPlatform = String(platform || '').trim().toLowerCase();
+  const externalId = String(pageLike.external_account_id || pageLike.externalAccountId || '').trim();
+
+  if (cleanPlatform && externalId) {
+    return `${cleanPlatform}:external:${externalId}`;
+  }
+
+  const cleanHandle = normalizePageHandle(pageLike.handle);
+  if (cleanPlatform && cleanHandle) {
+    return `${cleanPlatform}:handle:${cleanHandle}`;
+  }
+
+  const cleanUrl = normalizePageUrl(pageLike.url);
+  if (cleanPlatform && cleanUrl) {
+    return `${cleanPlatform}:url:${cleanUrl}`;
+  }
+
+  return '';
+}
+
 async function sendSubmissionToGoogleSheet(postUrl, musicTitle) {
   const sheetUrl = process.env.GOOGLE_SHEETS_SCRAPER_URL;
 
@@ -461,6 +522,426 @@ async function requestGoogleSheetScrapeAndGetMetrics(postUrl, musicTitle) {
   throw new Error('Link was added to input, but output is not ready yet. Try Sync Metrics again later.');
 }
 
+
+async function getCreatorWalletSummary(userId) {
+  const userIdText = String(userId);
+
+  const earningsResult = await pool.query(
+    `
+    SELECT
+      COALESCE(
+        SUM(COALESCE(payment_amount, 0)) FILTER (
+          WHERE LOWER(COALESCE(status, '')) IN ('approved', 'paid')
+        ),
+        0
+      )::numeric AS total_earnings,
+      COUNT(*) FILTER (
+        WHERE LOWER(COALESCE(status, '')) <> 'deleted'
+      )::int AS total_videos
+    FROM submissions
+    WHERE user_id::text = $1
+    `,
+    [userIdText]
+  );
+
+  const withdrawalsResult = await pool.query(
+    `
+    SELECT
+      COALESCE(
+        SUM(amount) FILTER (
+          WHERE LOWER(COALESCE(status, '')) IN ('requested', 'pending', 'approved')
+        ),
+        0
+      )::numeric AS pending_withdrawals,
+      COALESCE(
+        SUM(amount) FILTER (
+          WHERE LOWER(COALESCE(status, '')) = 'paid'
+        ),
+        0
+      )::numeric AS paid_out,
+      COALESCE(
+        SUM(amount) FILTER (
+          WHERE LOWER(COALESCE(status, '')) IN ('requested', 'pending', 'approved', 'paid')
+        ),
+        0
+      )::numeric AS reserved_or_paid
+    FROM withdrawals
+    WHERE user_id::text = $1
+    `,
+    [userIdText]
+  );
+
+  const profileResult = await pool.query(
+    `
+    SELECT pix_key_last4
+    FROM profiles
+    WHERE id::text = $1
+    LIMIT 1
+    `,
+    [userIdText]
+  );
+
+  const earnings = earningsResult.rows[0] || {};
+  const withdrawals = withdrawalsResult.rows[0] || {};
+  const profile = profileResult.rows[0] || {};
+
+  const totalEarnings = Number(earnings.total_earnings || 0);
+  const pendingWithdrawals = Number(withdrawals.pending_withdrawals || 0);
+  const paidOut = Number(withdrawals.paid_out || 0);
+  const reservedOrPaid = Number(withdrawals.reserved_or_paid || 0);
+  const available = Math.max(totalEarnings - reservedOrPaid, 0);
+
+  return {
+    total_earnings: totalEarnings,
+    balance_total: totalEarnings,
+    balance_available: available,
+    pending_withdrawals: pendingWithdrawals,
+    paid_out: paidOut,
+    total_videos: Number(earnings.total_videos || 0),
+    pix_key: profile.pix_key_last4 ? `**** ${profile.pix_key_last4}` : null,
+  };
+}
+
+
+function getTikTokConfig() {
+  return {
+    clientKey: process.env.TIKTOK_CLIENT_KEY,
+    clientSecret: process.env.TIKTOK_CLIENT_SECRET,
+    redirectUri: process.env.TIKTOK_REDIRECT_URI,
+    frontendBaseUrl: process.env.FRONTEND_BASE_URL || 'http://localhost:8080',
+  };
+}
+
+function requireTikTokConfig() {
+  const config = getTikTokConfig();
+
+  if (!config.clientKey || !config.clientSecret || !config.redirectUri) {
+    throw new Error(
+      'TikTok OAuth is not configured. Set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, and TIKTOK_REDIRECT_URI in .env.local'
+    );
+  }
+
+  return config;
+}
+
+async function exchangeTikTokCodeForToken(code) {
+  const config = requireTikTokConfig();
+
+  const body = new URLSearchParams({
+    client_key: config.clientKey,
+    client_secret: config.clientSecret,
+    code: String(code),
+    grant_type: 'authorization_code',
+    redirect_uri: config.redirectUri,
+  });
+
+  const response = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || json.error) {
+    throw new Error(json.error_description || json.error || json.message || 'TikTok token exchange failed');
+  }
+
+  return json;
+}
+
+async function refreshTikTokAccessToken(refreshToken) {
+  const config = requireTikTokConfig();
+
+  const body = new URLSearchParams({
+    client_key: config.clientKey,
+    client_secret: config.clientSecret,
+    grant_type: 'refresh_token',
+    refresh_token: String(refreshToken),
+  });
+
+  const response = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || json.error) {
+    throw new Error(json.error_description || json.error || json.message || 'TikTok token refresh failed');
+  }
+
+  return json;
+}
+
+async function getTikTokUserInfo(accessToken) {
+  // Keep the initial field list conservative so user.info.basic is enough.
+  // Add profile_deep_link or bio_description later only if your TikTok app is approved for that scope.
+  const fields = ['open_id', 'union_id', 'avatar_url', 'display_name'].join(',');
+
+  const response = await fetch(
+    `https://open.tiktokapis.com/v2/user/info/?fields=${encodeURIComponent(fields)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || json.error?.code !== 'ok') {
+    throw new Error(json.error?.message || json.error?.code || json.message || 'TikTok user info failed');
+  }
+
+  return json.data?.user || {};
+}
+
+function extractTikTokVideoId(url) {
+  const text = String(url || '').trim();
+
+  const directMatch = text.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
+  if (directMatch?.[1]) return directMatch[1];
+
+  const idMatch = text.match(/\/video\/(\d+)/i);
+  if (idMatch?.[1]) return idMatch[1];
+
+  return '';
+}
+
+async function resolveTikTokUrl(url) {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+    });
+
+    return response.url || url;
+  } catch (_err) {
+    return url;
+  }
+}
+
+async function getTikTokVideoIdFromUrl(url) {
+  let videoId = extractTikTokVideoId(url);
+
+  if (videoId) return videoId;
+
+  const resolvedUrl = await resolveTikTokUrl(url);
+  videoId = extractTikTokVideoId(resolvedUrl);
+
+  return videoId;
+}
+
+async function getValidTikTokAccessTokenForUser(userId) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM tiktok_connections
+    WHERE user_id::text = $1
+    ORDER BY updated_at DESC
+    LIMIT 1
+    `,
+    [String(userId)]
+  );
+
+  const connection = result.rows[0];
+
+  if (!connection) {
+    throw new Error('Creator has not connected TikTok');
+  }
+
+  const now = Date.now();
+  const expiresAt = connection.access_token_expires_at
+    ? new Date(connection.access_token_expires_at).getTime()
+    : 0;
+
+  if (expiresAt && expiresAt - now > 60_000) {
+    return {
+      accessToken: decryptToken(connection.encrypted_access_token),
+      connection,
+    };
+  }
+
+  const refreshToken = decryptToken(connection.encrypted_refresh_token);
+  const refreshed = await refreshTikTokAccessToken(refreshToken);
+
+  const newAccessExpiresAt = new Date(Date.now() + Number(refreshed.expires_in || 0) * 1000);
+  const newRefreshExpiresAt = refreshed.refresh_expires_in
+    ? new Date(Date.now() + Number(refreshed.refresh_expires_in || 0) * 1000)
+    : connection.refresh_token_expires_at;
+
+  await pool.query(
+    `
+    UPDATE tiktok_connections
+    SET
+      encrypted_access_token = $2,
+      encrypted_refresh_token = COALESCE($3, encrypted_refresh_token),
+      access_token_expires_at = $4,
+      refresh_token_expires_at = COALESCE($5, refresh_token_expires_at),
+      updated_at = now()
+    WHERE id = $1
+    `,
+    [
+      connection.id,
+      encryptToken(refreshed.access_token),
+      refreshed.refresh_token ? encryptToken(refreshed.refresh_token) : null,
+      newAccessExpiresAt,
+      newRefreshExpiresAt,
+    ]
+  );
+
+  return {
+    accessToken: refreshed.access_token,
+    connection,
+  };
+}
+
+async function listTikTokVideos(accessToken, cursor = null) {
+  const fields = [
+    'id',
+    'create_time',
+    'cover_image_url',
+    'share_url',
+    'video_description',
+    'duration',
+    'title',
+    'embed_link',
+    'like_count',
+    'comment_count',
+    'share_count',
+    'view_count',
+  ].join(',');
+
+  const body = {
+    max_count: 20,
+  };
+
+  if (cursor) {
+    body.cursor = cursor;
+  }
+
+  const response = await fetch(
+    `https://open.tiktokapis.com/v2/video/list/?fields=${encodeURIComponent(fields)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || json.error?.code !== 'ok') {
+    throw new Error(json.error?.message || json.error?.code || json.message || 'TikTok video list failed');
+  }
+
+  return {
+    videos: json.data?.videos || [],
+    cursor: json.data?.cursor || null,
+    hasMore: Boolean(json.data?.has_more),
+  };
+}
+
+async function queryTikTokVideo(accessToken, videoId) {
+  const fields = [
+    'id',
+    'create_time',
+    'cover_image_url',
+    'share_url',
+    'video_description',
+    'duration',
+    'title',
+    'embed_link',
+    'like_count',
+    'comment_count',
+    'share_count',
+    'view_count',
+  ].join(',');
+
+  const response = await fetch(
+    `https://open.tiktokapis.com/v2/video/query/?fields=${encodeURIComponent(fields)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filters: {
+          video_ids: [String(videoId)],
+        },
+      }),
+    }
+  );
+
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || json.error?.code !== 'ok') {
+    throw new Error(json.error?.message || json.error?.code || json.message || 'TikTok video query failed');
+  }
+
+  return json.data?.videos?.[0] || null;
+}
+
+
+app.get('/', (_req, res) => {
+  res.type('html').send(`
+    <!doctype html>
+    <html>
+      <head><title>Somma</title></head>
+      <body>
+        <h1>Somma</h1>
+        <p>Somma is a creator campaign platform that lets creators connect social accounts, submit campaign content, and track approved payouts.</p>
+        <p><a href="/terms">Terms of Service</a></p>
+        <p><a href="/privacy">Privacy Policy</a></p>
+      </body>
+    </html>
+  `);
+});
+
+app.get('/terms', (_req, res) => {
+  res.type('html').send(`
+    <!doctype html>
+    <html>
+      <head><title>Somma Terms of Service</title></head>
+      <body>
+        <h1>Somma Terms of Service</h1>
+        <p>Somma allows creators to connect social media accounts, participate in campaigns, submit content, and request payouts for approved submissions.</p>
+        <p>Creators are responsible for submitting only content they own or are authorized to submit.</p>
+        <p>Somma may review, approve, reject, or remove submissions that do not meet campaign requirements.</p>
+        <p>Payouts are based on campaign rules and verified metrics. Somma may delay or reject payouts if fraud, invalid content, or inaccurate metrics are detected.</p>
+        <p>Contact: georgiaeick@g.ucla.edu</p>
+      </body>
+    </html>
+  `);
+});
+
+app.get('/privacy', (_req, res) => {
+  res.type('html').send(`
+    <!doctype html>
+    <html>
+      <head><title>Somma Privacy Policy</title></head>
+      <body>
+        <h1>Somma Privacy Policy</h1>
+        <p>Somma collects account information, connected social profile information, submitted content URLs, campaign participation data, and payout request information.</p>
+        <p>When creators connect TikTok, Somma uses authorized TikTok API access to read basic profile information and public video metadata needed for campaign submissions and payout calculations.</p>
+        <p>Somma does not sell creator data. Data is used to operate campaigns, verify submissions, calculate earnings, and process payout requests.</p>
+        <p>Creators may contact Somma to request account or data deletion.</p>
+        <p>Contact: georgiaeick@g.ucla.edu</p>
+      </body>
+    </html>
+  `);
+});
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.get('/api/campaigns/active', async (req, res) => {
@@ -529,14 +1010,203 @@ app.post('/api/pages', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
     const { platform, handle, url, follower_count, tags } = req.body;
-    const result = await pool.query(
-      'INSERT INTO pages(user_id, platform, handle, url, follower_count, tags, created_at) VALUES($1,$2,$3,$4,$5,$6,now()) RETURNING *',
-      [userId, platform, handle, url, follower_count, tags]
+    const cleanPlatform = String(platform || '').trim().toLowerCase();
+    const cleanHandle = normalizePageHandle(handle);
+    const cleanUrl = String(url || '').trim();
+    const pageKey = getPageDedupeKey(cleanPlatform, {
+      handle: cleanHandle,
+      url: cleanUrl,
+    });
+
+    if (!cleanPlatform || !pageKey) {
+      return res.status(400).json({
+        error: 'Platform and page handle or URL are required',
+      });
+    }
+
+    const duplicateResult = await pool.query(
+      `
+      SELECT id, platform, handle, url
+      FROM pages
+      WHERE user_id::text = $1
+        AND platform = $2
+        AND page_key = $3
+      LIMIT 1
+      `,
+      [String(userId), cleanPlatform, pageKey]
     );
+
+    if (duplicateResult.rows.length > 0) {
+      return res.status(409).json({
+        error: 'This social media page has already been added',
+        data: duplicateResult.rows[0],
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO pages(
+        user_id,
+        platform,
+        handle,
+        url,
+        follower_count,
+        tags,
+        page_key,
+        dedupe_guard,
+        created_at
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7,true,now())
+      RETURNING *
+      `,
+      [userId, cleanPlatform, cleanHandle || handle, cleanUrl, follower_count, tags, pageKey]
+    );
+
     res.json({ data: result.rows[0] });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'DB error' });
+    console.error('Page create error', err);
+
+    if (err.code === '23505') {
+      return res.status(409).json({
+        error: 'This social media page has already been added',
+      });
+    }
+
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
+  }
+});
+
+app.patch('/api/pages/:id', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const pageId = req.params.id;
+    const { handle, url, follower_count, tags } = req.body;
+
+    const pageResult = await pool.query(
+      `
+      SELECT *
+      FROM pages
+      WHERE id::text = $1
+        AND user_id::text = $2
+      LIMIT 1
+      `,
+      [String(pageId), String(userId)]
+    );
+
+    const existingPage = pageResult.rows[0];
+
+    if (!existingPage) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    const nextTags = normalizeArray(tags);
+
+    if (nextTags.length === 0) {
+      return res.status(400).json({
+        error: 'Select at least one tag for this page',
+      });
+    }
+
+    // OAuth-verified pages prove account ownership through the platform.
+    // Users can only edit their own classification tags, not the verified identity fields.
+    if (existingPage.verified === true) {
+      const result = await pool.query(
+        `
+        UPDATE pages
+        SET tags = $3
+        WHERE id::text = $1
+          AND user_id::text = $2
+        RETURNING *
+        `,
+        [String(pageId), String(userId), nextTags]
+      );
+
+      return res.json({ data: result.rows[0] });
+    }
+
+    // Manual/unverified pages can edit the fields the creator typed manually.
+    const cleanPlatform = String(existingPage.platform || '').trim().toLowerCase();
+    const cleanHandle = normalizePageHandle(handle || existingPage.handle);
+    const cleanUrl = String(url || existingPage.url || '').trim();
+    const nextFollowerCount =
+      follower_count === undefined || follower_count === null || follower_count === ''
+        ? existingPage.follower_count
+        : Number(follower_count);
+
+    if (!cleanHandle || !cleanUrl || !Number.isFinite(Number(nextFollowerCount))) {
+      return res.status(400).json({
+        error: 'Handle, profile URL, follower count, and tags are required for manual pages',
+      });
+    }
+
+    const nextPageKey = getPageDedupeKey(cleanPlatform, {
+      handle: cleanHandle,
+      url: cleanUrl,
+    });
+
+    const duplicateResult = await pool.query(
+      `
+      SELECT id, handle
+      FROM pages
+      WHERE user_id::text = $1
+        AND platform = $2
+        AND page_key = $3
+        AND id::text <> $4
+      LIMIT 1
+      `,
+      [String(userId), cleanPlatform, nextPageKey, String(pageId)]
+    );
+
+    if (duplicateResult.rows.length > 0) {
+      return res.status(409).json({
+        error: 'This social media page has already been added',
+        data: duplicateResult.rows[0],
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE pages
+      SET
+        handle = $3,
+        url = $4,
+        follower_count = $5,
+        tags = $6,
+        page_key = $7
+      WHERE id::text = $1
+        AND user_id::text = $2
+      RETURNING *
+      `,
+      [
+        String(pageId),
+        String(userId),
+        cleanHandle,
+        cleanUrl,
+        Number(nextFollowerCount),
+        nextTags,
+        nextPageKey,
+      ]
+    );
+
+    res.json({ data: result.rows[0] });
+  } catch (err) {
+    console.error('Page update error', err);
+
+    if (err.code === '23505') {
+      return res.status(409).json({
+        error: 'This social media page has already been added',
+      });
+    }
+
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
@@ -557,30 +1227,17 @@ app.get('/api/profile', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
 
-    const result = await pool.query(
+    await pool.query(
       `
-      SELECT
-        total_earnings,
-        pix_key_last4
-      FROM profiles
-      WHERE id = $1
+      INSERT INTO profiles(id, total_earnings, created_at)
+      VALUES($1, 0, now())
+      ON CONFLICT (id) DO NOTHING
       `,
       [userId]
     );
 
-    const profile = result.rows[0];
-
-    res.json({
-      data: profile
-        ? {
-            total_earnings: profile.total_earnings,
-            pix_key: profile.pix_key_last4 ? `**** ${profile.pix_key_last4}` : null,
-          }
-        : {
-            total_earnings: 0,
-            pix_key: null,
-          },
-    });
+    const summary = await getCreatorWalletSummary(userId);
+    res.json({ data: summary });
   } catch (err) {
     console.error('Profile load error', err);
     res.status(500).json({
@@ -594,11 +1251,42 @@ app.get('/api/profile', verifyToken, async (req, res) => {
 app.get('/api/withdrawals', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const result = await pool.query('SELECT * FROM withdrawals WHERE user_id = $1 ORDER BY requested_at DESC', [userId]);
+
+    // Creator-facing route: never return the full PIX key to the creator browser
+    // after it has been saved. Show only the masked hint.
+    const result = await pool.query(
+      `
+      SELECT
+        w.id,
+        w.user_id,
+        w.amount,
+        w.status,
+        w.pix_key_last4,
+        CASE
+          WHEN COALESCE(w.pix_key_last4, pr.pix_key_last4) IS NOT NULL
+            THEN '**** ' || COALESCE(w.pix_key_last4, pr.pix_key_last4)
+          ELSE NULL
+        END AS pix_key,
+        w.requested_at,
+        w.processed_at,
+        w.processed_by
+      FROM withdrawals w
+      LEFT JOIN profiles pr
+        ON pr.id::text = w.user_id::text
+      WHERE w.user_id::text = $1
+      ORDER BY w.requested_at DESC
+      `,
+      [String(userId)]
+    );
+
     res.json({ data: result.rows });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'DB error' });
+    console.error('Withdrawal list error', err);
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 
@@ -606,40 +1294,89 @@ app.post('/api/withdrawals', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
     const { amount, pix_key } = req.body;
+    const amountNumber = Number(amount);
 
-    if (!amount || Number(amount) <= 0) {
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
       return res.status(400).json({
         error: 'Withdrawal amount must be greater than 0',
       });
     }
 
-    const pixKeyLast4 =
-      typeof pix_key === 'string' && pix_key.trim()
-        ? pix_key.trim().slice(-4)
-        : null;
-
-    if (pixKeyLast4) {
-      await pool.query(
-        `
-        INSERT INTO profiles(id, total_earnings, pix_key_last4, created_at)
-        VALUES($1, 0, $2, now())
-        ON CONFLICT (id)
-        DO UPDATE SET pix_key_last4 = EXCLUDED.pix_key_last4
-        `,
-        [userId, pixKeyLast4]
-      );
+    if (amountNumber < 25) {
+      return res.status(400).json({
+        error: 'Minimum withdrawal is R$ 25,00',
+      });
     }
+
+    const pixKey = String(pix_key || '').trim();
+
+    if (!pixKey || pixKey.startsWith('****')) {
+      return res.status(400).json({
+        error: 'Please enter the full PIX key',
+      });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO profiles(id, total_earnings, created_at)
+      VALUES($1, 0, now())
+      ON CONFLICT (id) DO NOTHING
+      `,
+      [userId]
+    );
+
+    const wallet = await getCreatorWalletSummary(userId);
+
+    if (amountNumber > Number(wallet.balance_available || 0)) {
+      return res.status(400).json({
+        error: 'Insufficient available balance',
+        available: wallet.balance_available,
+      });
+    }
+
+    const pixKeyLast4 = pixKey.slice(-4);
+
+    // Store the full PIX key in Postgres for admin payout processing.
+    // The creator-facing API still returns only a masked key.
+    await pool.query(
+      `
+      UPDATE profiles
+      SET
+        pix_key = $2,
+        pix_key_last4 = $3
+      WHERE id::text = $1
+      `,
+      [String(userId), pixKey, pixKeyLast4]
+    );
 
     const result = await pool.query(
       `
-      INSERT INTO withdrawals(user_id, amount, status, requested_at)
-      VALUES($1, $2, 'requested', now())
-      RETURNING *
+      INSERT INTO withdrawals(
+        user_id,
+        amount,
+        status,
+        pix_key,
+        pix_key_last4,
+        requested_at
+      )
+      VALUES($1, $2, 'requested', $3, $4, now())
+      RETURNING
+        id,
+        user_id,
+        amount,
+        status,
+        pix_key_last4,
+        requested_at
       `,
-      [userId, amount]
+      [userId, amountNumber, pixKey, pixKeyLast4]
     );
 
-    res.json({ data: result.rows[0] });
+    res.json({
+      data: {
+        ...result.rows[0],
+        pix_key: `**** ${pixKeyLast4}`,
+      },
+    });
   } catch (err) {
     console.error('Withdrawal create error', err);
     res.status(500).json({
@@ -654,7 +1391,7 @@ app.post('/api/withdrawals', verifyToken, async (req, res) => {
 app.post('/api/submissions', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const { campaign_id, page_id, post_url } = req.body;
+    const { campaign_id, page_id, post_url, audio_url, tiktok_video_id } = req.body;
 
     if (!campaign_id || !page_id || !post_url) {
       return res.status(400).json({
@@ -732,12 +1469,13 @@ app.post('/api/submissions', verifyToken, async (req, res) => {
         title,
         platform,
         post_url,
+        tiktok_video_id,
         status,
         audio_verified,
         uploaded_at,
         created_at
       )
-      VALUES($1,$2,$3,$4,$5,$6,'pending',false,now(),now())
+      VALUES($1,$2,$3,$4,$5,$6,$7,'pending',false,now(),now())
       RETURNING *
       `,
       [
@@ -747,6 +1485,7 @@ app.post('/api/submissions', verifyToken, async (req, res) => {
         `${campaign.title || 'Campaign'} - Submission`,
         page.platform,
         post_url,
+        tiktok_video_id || null,
       ]
     );
 
@@ -1000,64 +1739,75 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
 
     const handle = `@${profileJson.username}`;
     const url = `https://www.instagram.com/${profileJson.username}`;
+    const instagramExternalId = String(profileJson.id);
+    const pageKey = getPageDedupeKey('instagram', {
+      external_account_id: instagramExternalId,
+      handle,
+      url,
+    });
 
-    const pageResult = await pool.query(
+    const existingPageResult = await pool.query(
       `
-      INSERT INTO pages(
-        user_id,
-        platform,
-        handle,
-        url,
-        follower_count,
-        tags,
-        external_account_id,
-        verified,
-        verified_at,
-        created_at
-      )
-      VALUES($1, 'instagram', $2, $3, NULL, $4, $5, true, now(), now())
-      ON CONFLICT DO NOTHING
-      RETURNING *
+      SELECT *
+      FROM pages
+      WHERE user_id::text = $1
+        AND platform = 'instagram'
+        AND (
+          external_account_id = $2
+          OR page_key = $3
+        )
+      ORDER BY verified DESC, created_at DESC
+      LIMIT 1
       `,
-      [userId, handle, url, [], String(profileJson.id)]
+      [String(userId), instagramExternalId, pageKey]
     );
 
-    let page = pageResult.rows[0];
+    let page = existingPageResult.rows[0] || null;
 
-    if (!page) {
-      const existingPageResult = await pool.query(
-        `
-        SELECT *
-        FROM pages
-        WHERE user_id = $1
-          AND platform = 'instagram'
-          AND external_account_id = $2
-        LIMIT 1
-        `,
-        [userId, String(profileJson.id)]
-      );
-
-      page = existingPageResult.rows[0] || null;
-    }
-
-    if (!page) {
+    if (page) {
       const updateResult = await pool.query(
         `
         UPDATE pages
         SET
-          handle = $3,
-          url = $4,
+          handle = $2,
+          url = $3,
+          follower_count = COALESCE($4, follower_count),
+          external_account_id = $5,
+          page_key = $6,
+          dedupe_guard = true,
           verified = true,
           verified_at = now()
-        WHERE user_id = $1
-          AND platform = 'instagram'
-          AND handle = $2
+        WHERE id = $1
         RETURNING *
         `,
-        [userId, handle, handle, url]
+        [page.id, handle, url, profileJson.followers_count || null, instagramExternalId, pageKey]
       );
 
-      page = updateResult.rows[0] || null;
+      page = updateResult.rows[0] || page;
+    } else {
+      const pageResult = await pool.query(
+        `
+        INSERT INTO pages(
+          user_id,
+          platform,
+          handle,
+          url,
+          follower_count,
+          tags,
+          external_account_id,
+          page_key,
+          dedupe_guard,
+          verified,
+          verified_at,
+          created_at
+        )
+        VALUES($1, 'instagram', $2, $3, $4, $5, $6, $7, true, true, now(), now())
+        RETURNING *
+        `,
+        [userId, handle, url, profileJson.followers_count || null, [], instagramExternalId, pageKey]
+      );
+
+      page = pageResult.rows[0];
     }
 
     if (!page) {
@@ -1101,6 +1851,213 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
   }
 });
 
+
+
+// TikTok OAuth routes.
+// The frontend calls /auth-url with a normal Bearer token. The backend
+// returns the TikTok authorization URL because browser redirects cannot
+// attach an Authorization header.
+app.get('/api/integrations/tiktok/auth-url', verifyToken, async (req, res) => {
+  try {
+    const config = requireTikTokConfig();
+    const state = createOAuthState(req.user.sub);
+
+    const params = new URLSearchParams({
+      client_key: config.clientKey,
+      response_type: 'code',
+      scope: 'user.info.basic,video.list',
+      redirect_uri: config.redirectUri,
+      state,
+    });
+
+    res.json({
+      data: {
+        url: `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`,
+      },
+    });
+  } catch (err) {
+    console.error('TikTok auth-url error', err);
+    res.status(500).json({
+      error: 'Failed to create TikTok auth URL',
+      details: err.message,
+    });
+  }
+});
+
+app.get('/api/integrations/tiktok/callback', async (req, res) => {
+  try {
+    const config = requireTikTokConfig();
+    const { code, state, error, error_description } = req.query;
+
+    if (error) {
+      return res.redirect(
+        `${config.frontendBaseUrl}/pages?tiktok=error&message=${encodeURIComponent(
+          String(error_description || error)
+        )}`
+      );
+    }
+
+    if (!code || !state) {
+      return res.redirect(`${config.frontendBaseUrl}/pages?tiktok=missing_code`);
+    }
+
+    const parsedState = parseAndVerifyOAuthState(String(state));
+    const userId = parsedState.userId;
+
+    const tokenData = await exchangeTikTokCodeForToken(String(code));
+    const accessToken = tokenData.access_token;
+    const refreshToken = tokenData.refresh_token;
+
+    if (!accessToken || !refreshToken) {
+      throw new Error('TikTok did not return both access and refresh tokens');
+    }
+
+    const userInfo = await getTikTokUserInfo(accessToken);
+
+    if (!userInfo.open_id) {
+      throw new Error('TikTok did not return an open_id for this user');
+    }
+
+    const displayName = userInfo.display_name || 'TikTok Creator';
+    const handle = displayName.startsWith('@') ? displayName : `@${displayName}`;
+    const tiktokExternalId = String(userInfo.open_id);
+    const pageKey = getPageDedupeKey('tiktok', {
+      external_account_id: tiktokExternalId,
+      handle,
+      url: '',
+    });
+
+    const existingPageResult = await pool.query(
+      `
+      SELECT *
+      FROM pages
+      WHERE user_id::text = $1
+        AND platform = 'tiktok'
+        AND (
+          external_account_id = $2
+          OR page_key = $3
+        )
+      ORDER BY verified DESC, created_at DESC
+      LIMIT 1
+      `,
+      [String(userId), tiktokExternalId, pageKey]
+    );
+
+    let page = existingPageResult.rows[0] || null;
+
+    if (page) {
+      const updateResult = await pool.query(
+        `
+        UPDATE pages
+        SET
+          handle = $2,
+          verified = true,
+          verified_at = now(),
+          external_account_id = $3,
+          page_key = $4,
+          dedupe_guard = true
+        WHERE id = $1
+        RETURNING *
+        `,
+        [page.id, handle, tiktokExternalId, pageKey]
+      );
+
+      page = updateResult.rows[0] || page;
+    } else {
+      const pageResult = await pool.query(
+        `
+        INSERT INTO pages(
+          user_id,
+          platform,
+          handle,
+          url,
+          follower_count,
+          tags,
+          external_account_id,
+          page_key,
+          dedupe_guard,
+          verified,
+          verified_at,
+          created_at
+        )
+        VALUES($1, 'tiktok', $2, $3, 0, '{}', $4, $5, true, true, now(), now())
+        RETURNING *
+        `,
+        [userId, handle, '', tiktokExternalId, pageKey]
+      );
+
+      page = pageResult.rows[0];
+    }
+
+    if (!page) {
+      throw new Error('Could not create or find verified TikTok page');
+    }
+
+    const accessExpiresAt = new Date(
+      Date.now() + Number(tokenData.expires_in || 0) * 1000
+    );
+
+    const refreshExpiresAt = new Date(
+      Date.now() + Number(tokenData.refresh_expires_in || 0) * 1000
+    );
+
+    await pool.query(
+      `
+      INSERT INTO tiktok_connections(
+        user_id,
+        page_id,
+        tiktok_open_id,
+        display_name,
+        avatar_url,
+        profile_deep_link,
+        encrypted_access_token,
+        encrypted_refresh_token,
+        access_token_expires_at,
+        refresh_token_expires_at,
+        scopes,
+        created_at,
+        updated_at
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())
+      ON CONFLICT(user_id, tiktok_open_id)
+      DO UPDATE SET
+        page_id = EXCLUDED.page_id,
+        display_name = EXCLUDED.display_name,
+        avatar_url = EXCLUDED.avatar_url,
+        profile_deep_link = EXCLUDED.profile_deep_link,
+        encrypted_access_token = EXCLUDED.encrypted_access_token,
+        encrypted_refresh_token = EXCLUDED.encrypted_refresh_token,
+        access_token_expires_at = EXCLUDED.access_token_expires_at,
+        refresh_token_expires_at = EXCLUDED.refresh_token_expires_at,
+        scopes = EXCLUDED.scopes,
+        updated_at = now()
+      `,
+      [
+        userId,
+        page.id,
+        String(userInfo.open_id),
+        displayName,
+        userInfo.avatar_url || null,
+        userInfo.profile_deep_link || null,
+        encryptToken(accessToken),
+        encryptToken(refreshToken),
+        accessExpiresAt,
+        refreshExpiresAt,
+        tokenData.scope || '',
+      ]
+    );
+
+    res.redirect(`${config.frontendBaseUrl}/pages?tiktok=connected`);
+  } catch (err) {
+    console.error('TikTok callback error', err);
+
+    const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'http://localhost:8080';
+
+    res.redirect(
+      `${frontendBaseUrl}/pages?tiktok=error&message=${encodeURIComponent(err.message)}`
+    );
+  }
+});
 
 // Admin API routes.
 // All admin routes require a verified Neon Auth token and a matching
@@ -1558,7 +2515,10 @@ app.post('/api/admin/submissions/:id/sync-metrics', verifyToken, requireAdmin, a
       `
       SELECT
         s.id,
+        s.user_id,
         s.post_url,
+        s.platform,
+        s.tiktok_video_id,
         c.title AS campaign_title
       FROM submissions s
       LEFT JOIN campaigns c
@@ -1575,8 +2535,74 @@ app.post('/api/admin/submissions/:id/sync-metrics', verifyToken, requireAdmin, a
       return res.status(404).json({ error: 'Submission not found' });
     }
 
-    if (!submission.post_url) {
-      return res.status(400).json({ error: 'Submission has no post URL' });
+    if (!submission.post_url && !submission.tiktok_video_id) {
+      return res.status(400).json({ error: 'Submission has no post URL or TikTok video ID' });
+    }
+
+    const isTikTokSubmission =
+      String(submission.platform || '').toLowerCase() === 'tiktok' ||
+      String(submission.post_url || '').toLowerCase().includes('tiktok.com') ||
+      Boolean(submission.tiktok_video_id);
+
+    if (isTikTokSubmission) {
+      let videoId = submission.tiktok_video_id || '';
+
+      if (!videoId && submission.post_url) {
+        videoId = await getTikTokVideoIdFromUrl(submission.post_url);
+      }
+
+      if (!videoId) {
+        return res.status(400).json({
+          error: 'Could not find TikTok video ID from URL',
+          details: 'Use a full TikTok URL like https://www.tiktok.com/@username/video/1234567890, or select a video from the connected TikTok account.',
+        });
+      }
+
+      const { accessToken, connection } = await getValidTikTokAccessTokenForUser(submission.user_id);
+      const video = await queryTikTokVideo(accessToken, videoId);
+
+      if (!video) {
+        return res.status(404).json({
+          error: 'TikTok video not found for connected creator',
+          details: 'The video must belong to the TikTok account connected to this creator profile.',
+        });
+      }
+
+      const views = Number(video.view_count || 0);
+      const likes = Number(video.like_count || 0);
+      const comments = Number(video.comment_count || 0);
+      const shares = Number(video.share_count || 0);
+      const payout = computePayoutFromPlays(views);
+
+      const updateResult = await pool.query(
+        `
+        UPDATE submissions
+        SET
+          tiktok_video_id = $2,
+          username = $3,
+          likes_count = $4,
+          views_count = $5,
+          comments_count = $6,
+          shares_count = $7,
+          payment_amount = $8,
+          metrics_synced_at = now(),
+          metrics_source = 'tiktok_display_api'
+        WHERE id = $1
+        RETURNING *
+        `,
+        [
+          submission.id,
+          String(video.id || videoId),
+          connection.display_name || null,
+          likes,
+          views,
+          comments,
+          shares,
+          payout,
+        ]
+      );
+
+      return res.json({ data: updateResult.rows[0] });
     }
 
     const metric = await requestGoogleSheetScrapeAndGetMetrics(
@@ -1610,9 +2636,9 @@ app.post('/api/admin/submissions/:id/sync-metrics', verifyToken, requireAdmin, a
 
     res.json({ data: updateResult.rows[0] });
   } catch (err) {
-    console.error('Google Sheets sync metrics error', err);
+    console.error('Sync metrics error', err);
     res.status(500).json({
-      error: 'Failed to sync metrics from Google Sheets',
+      error: 'Failed to sync metrics',
       details: err.message,
       code: err.code,
     });
@@ -1641,47 +2667,14 @@ app.get('/api/admin/google-sheets-metrics', verifyToken, requireAdmin, async (_r
 
 app.get('/api/tiktok/videos', verifyToken, async (req, res) => {
   try {
+    const { cursor } = req.query;
     const { accessToken } = await getValidTikTokAccessTokenForUser(req.user.sub);
-
-    const fields = [
-      'id',
-      'create_time',
-      'cover_image_url',
-      'share_url',
-      'video_description',
-      'duration',
-      'title',
-      'embed_link',
-      'like_count',
-      'comment_count',
-      'share_count',
-      'view_count',
-    ].join(',');
-
-    const response = await fetch(
-      `https://open.tiktokapis.com/v2/video/list/?fields=${encodeURIComponent(fields)}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          max_count: 20,
-        }),
-      }
-    );
-
-    const json = await response.json();
-
-    if (!response.ok || json.error?.code !== 'ok') {
-      throw new Error(json.error?.message || 'TikTok video list failed');
-    }
+    const result = await listTikTokVideos(accessToken, cursor || null);
 
     res.json({
-      data: json.data.videos || [],
-      cursor: json.data.cursor || null,
-      has_more: json.data.has_more || false,
+      data: result.videos,
+      cursor: result.cursor,
+      has_more: result.hasMore,
     });
   } catch (err) {
     console.error('TikTok videos error', err);
@@ -1807,16 +2800,21 @@ app.patch('/api/admin/pages/:id', verifyToken, requireAdmin, async (req, res) =>
 
 app.get('/api/admin/withdrawals', verifyToken, requireAdmin, async (_req, res) => {
   try {
+    // Admin-facing route: return the full PIX key so the admin can actually pay.
     const result = await pool.query(
       `
       SELECT
-        w.*,
+        w.id,
+        w.user_id,
+        w.amount,
+        w.status,
+        COALESCE(w.pix_key, pr.pix_key) AS pix_key,
+        COALESCE(w.pix_key_last4, pr.pix_key_last4) AS pix_key_last4,
+        w.requested_at,
+        w.processed_at,
+        w.processed_by,
         au.email AS creator_email,
-        COALESCE(au.name, au.email, w.user_id::text) AS creator_name,
-        CASE
-          WHEN pr.pix_key_last4 IS NOT NULL THEN '**** ' || pr.pix_key_last4
-          ELSE NULL
-        END AS pix_key
+        COALESCE(au.name, au.email, w.user_id::text) AS creator_name
       FROM withdrawals w
       LEFT JOIN neon_auth."user" au
         ON au.id::text = w.user_id::text
@@ -1840,25 +2838,39 @@ app.get('/api/admin/withdrawals', verifyToken, requireAdmin, async (_req, res) =
 app.patch('/api/admin/withdrawals/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
+    const allowedStatuses = ['requested', 'pending', 'approved', 'paid', 'rejected'];
 
-    if (!status) {
-      return res.status(400).json({ error: 'Missing withdrawal status' });
+    if (!status || !allowedStatuses.includes(String(status))) {
+      return res.status(400).json({ error: 'Invalid withdrawal status' });
     }
 
     const result = await pool.query(
       `
       UPDATE withdrawals
-      SET status = $2
+      SET
+        status = $2,
+        processed_at = CASE
+          WHEN $2 IN ('paid', 'rejected') THEN now()
+          ELSE processed_at
+        END,
+        processed_by = CASE
+          WHEN $2 IN ('paid', 'rejected') THEN $3
+          ELSE processed_by
+        END
       WHERE id = $1
       RETURNING *
       `,
-      [req.params.id, status]
+      [req.params.id, status, req.user.sub]
     );
 
     res.json({ data: result.rows[0] || null });
   } catch (err) {
     console.error('Admin withdrawal update error', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({
+      error: 'DB error',
+      details: err.message,
+      code: err.code,
+    });
   }
 });
 

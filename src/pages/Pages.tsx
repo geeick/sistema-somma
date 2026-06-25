@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Instagram, Play, Youtube, Plus, Trash2, ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
+import { Instagram, Play, Youtube, Plus, Trash2, Pencil, ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface Page {
@@ -24,6 +24,7 @@ interface Page {
   verified?: boolean | null;
   verified_at?: string | null;
   external_account_id?: string | null;
+  page_key?: string | null;
 }
 
 const platformIcons: Record<string, LucideIcon> = {
@@ -54,6 +55,8 @@ const availableTags = [
   "Letras",
 ];
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+
 function normalizeTags(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.filter((tag): tag is string => typeof tag === "string");
@@ -75,6 +78,49 @@ function normalizeTags(value: unknown): string[] {
 
   return [];
 }
+function normalizePageHandle(value: string) {
+  const raw = String(value || "").trim().toLowerCase();
+  const withoutAt = raw.replace(/^@+/, "").replace(/\s+/g, "");
+  return withoutAt ? `@${withoutAt}` : "";
+}
+
+function normalizePageUrl(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/\?.*$/, "")
+    .replace(/#.*$/, "")
+    .replace(/\/+$/, "");
+}
+
+function getPageDedupeKey(platform: string, handleValue: string, urlValue: string) {
+  const cleanPlatform = String(platform || "").trim().toLowerCase();
+  const cleanHandle = normalizePageHandle(handleValue);
+
+  if (cleanPlatform && cleanHandle) {
+    return `${cleanPlatform}:handle:${cleanHandle}`;
+  }
+
+  const cleanUrl = normalizePageUrl(urlValue);
+
+  if (cleanPlatform && cleanUrl) {
+    return `${cleanPlatform}:url:${cleanUrl}`;
+  }
+
+  return "";
+}
+
+function getExistingPageKey(page: Page) {
+  if (page.page_key) return page.page_key;
+
+  if (page.external_account_id) {
+    return `${String(page.platform || "").toLowerCase()}:external:${String(page.external_account_id).trim()}`;
+  }
+
+  return getPageDedupeKey(page.platform, page.handle, page.url);
+}
+
 
 const Pages = () => {
   const navigate = useNavigate();
@@ -85,12 +131,21 @@ const Pages = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConnectingInstagram, setIsConnectingInstagram] = useState(false);
+  const [isConnectingTikTok, setIsConnectingTikTok] = useState(false);
 
   const [platform, setPlatform] = useState("");
   const [handle, setHandle] = useState("");
   const [url, setUrl] = useState("");
   const [followerCount, setFollowerCount] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  const [editingPage, setEditingPage] = useState<Page | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editHandle, setEditHandle] = useState("");
+  const [editUrl, setEditUrl] = useState("");
+  const [editFollowerCount, setEditFollowerCount] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
 
   const cleanHandle = (value: string) => {
     const cleaned = value.replace(/@/g, "");
@@ -104,6 +159,29 @@ const Pages = () => {
     setFollowerCount("");
     setSelectedTags([]);
     setIsConnectingInstagram(false);
+    setIsConnectingTikTok(false);
+  };
+
+  const resetEditForm = () => {
+    setEditingPage(null);
+    setEditHandle("");
+    setEditUrl("");
+    setEditFollowerCount("");
+    setEditTags([]);
+    setIsSavingEdit(false);
+  };
+
+  const openEditDialog = (page: Page) => {
+    setEditingPage(page);
+    setEditHandle(page.handle || "");
+    setEditUrl(page.url || "");
+    setEditFollowerCount(
+      page.follower_count === null || page.follower_count === undefined
+        ? ""
+        : String(page.follower_count)
+    );
+    setEditTags(normalizeTags(page.tags));
+    setIsEditDialogOpen(true);
   };
 
   const fetchPages = async () => {
@@ -145,6 +223,8 @@ const Pages = () => {
 
   useEffect(() => {
     const instagramStatus = searchParams.get("instagram");
+    const tiktokStatus = searchParams.get("tiktok");
+    const message = searchParams.get("message");
 
     if (instagramStatus === "connected") {
       toast({
@@ -155,10 +235,28 @@ const Pages = () => {
       setSearchParams({});
     }
 
-    if (instagramStatus === "error") {
+    if (instagramStatus === "error" || instagramStatus === "denied") {
       toast({
         title: "Instagram connection failed",
         description: "Please try connecting Instagram again.",
+        variant: "destructive",
+      });
+      setSearchParams({});
+    }
+
+    if (tiktokStatus === "connected") {
+      toast({
+        title: "TikTok connected",
+        description: "Your TikTok page was verified and added.",
+      });
+      fetchPages();
+      setSearchParams({});
+    }
+
+    if (tiktokStatus === "error" || tiktokStatus === "missing_code") {
+      toast({
+        title: "TikTok connection failed",
+        description: message || "Please try connecting TikTok again.",
         variant: "destructive",
       });
       setSearchParams({});
@@ -217,7 +315,7 @@ const Pages = () => {
       localStorage.setItem("pending_instagram_page_tags", JSON.stringify(selectedTags));
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE}/api/integrations/instagram/start`,
+        `${API_BASE}/api/integrations/instagram/start`,
         {
           method: "GET",
           headers: {
@@ -244,6 +342,62 @@ const Pages = () => {
     }
   };
 
+  const handleConnectTikTok = async () => {
+    if (!user) {
+      toast({
+        title: "Not signed in",
+        description: "Please sign in before connecting TikTok.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedTags.length === 0) {
+      toast({
+        title: "Tags required",
+        description: "Select at least one tag before connecting TikTok.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConnectingTikTok(true);
+
+    try {
+      const token = await getNeonAccessToken();
+
+      if (!token) {
+        throw new Error("Missing login token. Please sign out and sign in again.");
+      }
+
+      localStorage.setItem("pending_tiktok_page_tags", JSON.stringify(selectedTags));
+
+      const response = await fetch(`${API_BASE}/api/integrations/tiktok/auth-url`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await response.json();
+
+      if (!response.ok || !json.data?.url) {
+        throw new Error(json.error || json.details || "Failed to start TikTok connection");
+      }
+
+      window.location.href = json.data.url;
+    } catch (err: any) {
+      console.error("TikTok connection error:", err);
+      setIsConnectingTikTok(false);
+      toast({
+        title: "TikTok connection failed",
+        description: err.message || "Could not start TikTok login",
+        variant: "destructive",
+      });
+    }
+  };
+
+
   const handleAddManualPage = async () => {
     if (!user || !platform || !handle || !url || !followerCount) {
       toast({
@@ -263,10 +417,25 @@ const Pages = () => {
       return;
     }
 
+    const cleanHandleValue = normalizePageHandle(handle);
+    const newPageKey = getPageDedupeKey(platform, cleanHandleValue, url);
+    const duplicatePage = pages.find(
+      (page) => getExistingPageKey(page) === newPageKey
+    );
+
+    if (duplicatePage) {
+      toast({
+        title: "Page already added",
+        description: `${duplicatePage.handle} is already saved on your account.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const newPage = await apiClient.pages.create({
-        platform: platform as "tiktok" | "youtube_shorts",
-        handle,
+        platform: platform as "youtube_shorts",
+        handle: cleanHandleValue,
         url,
         follower_count: parseInt(followerCount, 10),
         tags: selectedTags,
@@ -284,11 +453,130 @@ const Pages = () => {
       resetForm();
       await fetchPages();
     } catch (err: any) {
+      const message = err.message || String(err);
       toast({
-        title: "Error",
+        title: message.toLowerCase().includes("already") ? "Page already added" : "Error",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleEditTag = (tag: string) => {
+    setEditTags((currentTags) =>
+      currentTags.includes(tag)
+        ? currentTags.filter((currentTag) => currentTag !== tag)
+        : [...currentTags, tag]
+    );
+  };
+
+  const handleSavePageEdit = async () => {
+    if (!editingPage) return;
+
+    if (editTags.length === 0) {
+      toast({
+        title: "Tags required",
+        description: "Select at least one tag for this page.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const isVerified = Boolean(editingPage.verified);
+    const body: Record<string, unknown> = {
+      tags: editTags,
+    };
+
+    if (!isVerified) {
+      const cleanHandleValue = normalizePageHandle(editHandle);
+
+      if (!cleanHandleValue || !editUrl || !editFollowerCount) {
+        toast({
+          title: "Missing page details",
+          description: "Handle, profile URL, follower count, and tags are required for manual pages.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const updatedPageKey = getPageDedupeKey(
+        editingPage.platform,
+        cleanHandleValue,
+        editUrl
+      );
+
+      const duplicatePage = pages.find(
+        (page) =>
+          page.id !== editingPage.id &&
+          getExistingPageKey(page) === updatedPageKey
+      );
+
+      if (duplicatePage) {
+        toast({
+          title: "Page already added",
+          description: `${duplicatePage.handle} is already saved on your account.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      body.handle = cleanHandleValue;
+      body.url = editUrl;
+      body.follower_count = parseInt(editFollowerCount, 10);
+    }
+
+    setIsSavingEdit(true);
+
+    try {
+      const token = await getNeonAccessToken();
+
+      if (!token) {
+        throw new Error("Missing login token. Please sign out and sign in again.");
+      }
+
+      const response = await fetch(`${API_BASE}/api/pages/${editingPage.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(json?.error || json?.details || "Failed to update page");
+      }
+
+      const updatedPage = {
+        ...json.data,
+        tags: normalizeTags(json.data?.tags),
+      };
+
+      setPages((currentPages) =>
+        currentPages.map((page) =>
+          page.id === editingPage.id ? updatedPage : page
+        )
+      );
+
+      toast({
+        title: "Page updated",
+        description: isVerified
+          ? "Your page tags were updated."
+          : "Your manual page details were updated.",
+      });
+
+      setIsEditDialogOpen(false);
+      resetEditForm();
+    } catch (err: any) {
+      toast({
+        title: "Could not update page",
         description: err.message || String(err),
         variant: "destructive",
       });
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -340,6 +628,30 @@ const Pages = () => {
     </div>
   );
 
+
+  const renderEditTagPicker = () => (
+    <div>
+      <Label>Tags *</Label>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {availableTags.map((tag) => (
+          <Badge
+            key={tag}
+            variant={editTags.includes(tag) ? "default" : "outline"}
+            className="cursor-pointer"
+            onClick={() => toggleEditTag(tag)}
+          >
+            {tag}
+          </Badge>
+        ))}
+      </div>
+      {editTags.length === 0 && (
+        <p className="text-xs text-destructive mt-1">
+          Select at least one tag.
+        </p>
+      )}
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -382,7 +694,7 @@ const Pages = () => {
                 <DialogHeader>
                   <DialogTitle>Add New Page</DialogTitle>
                   <DialogDescription>
-                    Instagram pages are verified through Instagram login. TikTok and YouTube can be added manually for now.
+                    Instagram and TikTok pages are verified through platform login. YouTube can be added manually for now.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -434,7 +746,43 @@ const Pages = () => {
                     </div>
                   )}
 
-                  {platform && platform !== "instagram" && (
+
+
+                  {platform === "tiktok" && (
+                    <div className="space-y-4">
+                      <Card className="bg-muted/40 border-border">
+                        <CardContent className="pt-6 space-y-3">
+                          <div className="flex items-center gap-3">
+                            <Play className="h-8 w-8 text-primary" />
+                            <div>
+                              <p className="font-semibold">Verify TikTok ownership</p>
+                              <p className="text-sm text-muted-foreground">
+                                You will be sent to TikTok to authorize Somma. After approval, Somma will save your TikTok account as a verified page and can load your authorized public videos.
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {renderTagPicker()}
+
+                      <Button
+                        onClick={handleConnectTikTok}
+                        disabled={isConnectingTikTok}
+                        className="w-full"
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        {isConnectingTikTok ? "Connecting..." : "Connect TikTok"}
+                      </Button>
+
+                      <p className="text-xs text-muted-foreground">
+                        TikTok verification happens through TikTok login. Do not manually type TikTok follower counts for verified accounts.
+                      </p>
+                    </div>
+                  )}
+
+
+                  {platform && platform !== "instagram" && platform !== "tiktok" && (
                     <div className="space-y-4">
                       <div>
                         <Label>Handle/Username *</Label>
@@ -484,6 +832,99 @@ const Pages = () => {
             </Dialog>
           </div>
 
+          <Dialog
+            open={isEditDialogOpen}
+            onOpenChange={(open) => {
+              setIsEditDialogOpen(open);
+              if (!open) resetEditForm();
+            }}
+          >
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Page</DialogTitle>
+                <DialogDescription>
+                  Verified pages can only edit tags. Manual pages can edit the fields you entered yourself.
+                </DialogDescription>
+              </DialogHeader>
+
+              {editingPage && (
+                <div className="space-y-4">
+                  <Card className="bg-muted/40 border-border">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="font-semibold">{editingPage.handle}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {platformLabels[editingPage.platform] || editingPage.platform}
+                          </p>
+                        </div>
+                        {editingPage.verified ? (
+                          <Badge className="gap-1">
+                            <ShieldCheck className="h-3 w-3" />
+                            Verified
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1">
+                            <ShieldAlert className="h-3 w-3" />
+                            Unverified
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {!editingPage.verified && (
+                    <>
+                      <div>
+                        <Label>Handle/Username *</Label>
+                        <Input
+                          placeholder="@yourhandle"
+                          value={editHandle}
+                          onChange={(event) => setEditHandle(cleanHandle(event.target.value))}
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Profile URL *</Label>
+                        <Input
+                          placeholder="https://..."
+                          value={editUrl}
+                          onChange={(event) => setEditUrl(event.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Follower Count *</Label>
+                        <Input
+                          type="number"
+                          placeholder="10000"
+                          value={editFollowerCount}
+                          onChange={(event) => setEditFollowerCount(event.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {editingPage.verified && (
+                    <p className="text-sm text-muted-foreground">
+                      This page was verified through OAuth, so account identity fields are locked. You can still edit campaign matching tags.
+                    </p>
+                  )}
+
+                  {renderEditTagPicker()}
+
+                  <Button
+                    onClick={handleSavePageEdit}
+                    disabled={isSavingEdit}
+                    className="w-full"
+                  >
+                    {isSavingEdit ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
           {pages.length === 0 ? (
             <Card className="bg-gradient-card border-border">
               <CardContent className="pt-6 text-center text-muted-foreground">
@@ -522,13 +963,25 @@ const Pages = () => {
                           </div>
                         </div>
 
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeletePage(page.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(page)}
+                            aria-label={`Edit ${page.handle}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeletePage(page.id)}
+                            aria-label={`Delete ${page.handle}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     </CardHeader>
 
@@ -575,3 +1028,6 @@ const Pages = () => {
 };
 
 export default Pages;
+
+
+

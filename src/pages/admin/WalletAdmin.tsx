@@ -38,6 +38,7 @@ type Withdrawal = {
   user_id: string;
   amount: number | string | null;
   pix_key?: string | null;
+  pix_key_last4?: string | null;
   status: string | null;
   requested_at: string | null;
   creator_email?: string | null;
@@ -93,6 +94,16 @@ function formatDate(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "Not set";
 
   return date.toLocaleDateString("pt-BR");
+}
+
+function getPixKeyDisplay(withdrawal: Withdrawal) {
+  if (withdrawal.pix_key) return withdrawal.pix_key;
+  if (withdrawal.pix_key_last4) return `**** ${withdrawal.pix_key_last4}`;
+  return "No PIX key";
+}
+
+async function copyText(text: string) {
+  await navigator.clipboard.writeText(text);
 }
 
 function getStatusBadgeVariant(status?: string | null) {
@@ -170,7 +181,7 @@ export default function WalletAdmin() {
 
   const stats = useMemo(() => {
     const pending = withdrawals.filter((item) =>
-      ["requested", "pending"].includes(item.status || "")
+      ["requested", "pending", "approved"].includes(item.status || "")
     );
 
     const paid = withdrawals.filter((item) => item.status === "paid");
@@ -199,7 +210,17 @@ export default function WalletAdmin() {
 
   const pendingWithdrawals = useMemo(() => {
     return withdrawals
-      .filter((item) => ["requested", "pending"].includes(item.status || ""))
+      .filter((item) => ["requested", "pending", "approved"].includes(item.status || ""))
+      .sort(
+        (a, b) =>
+          new Date(b.requested_at || 0).getTime() -
+          new Date(a.requested_at || 0).getTime()
+      );
+  }, [withdrawals]);
+
+  const completedWithdrawals = useMemo(() => {
+    return withdrawals
+      .filter((item) => ["paid", "rejected"].includes(item.status || ""))
       .sort(
         (a, b) =>
           new Date(b.requested_at || 0).getTime() -
@@ -243,13 +264,13 @@ export default function WalletAdmin() {
 
   const exportCsv = () => {
     const rows = [
-      ["ID", "Creator", "User ID", "Amount", "PIX Hint", "Status", "Requested At"],
+      ["ID", "Creator", "User ID", "Amount", "PIX Key", "Status", "Requested At"],
       ...withdrawals.map((withdrawal) => [
         withdrawal.id,
         withdrawal.creator_email || withdrawal.creator_name || withdrawal.user_id || "",
         withdrawal.user_id || "",
         String(withdrawal.amount || 0),
-        withdrawal.pix_key || "",
+        getPixKeyDisplay(withdrawal),
         withdrawal.status || "",
         formatDate(withdrawal.requested_at),
       ]),
@@ -258,7 +279,7 @@ export default function WalletAdmin() {
     const csv = rows
       .map((row) =>
         row
-          .map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`)
+          .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`)
           .join(",")
       )
       .join("\n");
@@ -314,7 +335,7 @@ export default function WalletAdmin() {
 
             <p className="text-sm text-muted-foreground">
               If this says Backend returned 500, update the backend
-              /api/admin/withdrawals route so it returns masked PIX data only.
+              /api/admin/withdrawals route so it returns the full PIX key for admins.
             </p>
           </CardContent>
         </Card>
@@ -392,7 +413,7 @@ export default function WalletAdmin() {
                   <TableRow>
                     <TableHead>Creator</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>PIX Hint</TableHead>
+                    <TableHead>PIX Key</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Requested</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -418,8 +439,27 @@ export default function WalletAdmin() {
                       </TableCell>
 
                       <TableCell>
-                        <div className="max-w-[240px] truncate">
-                          {withdrawal.pix_key || "Stored securely"}
+                        <div className="flex items-center gap-2 max-w-[320px]">
+                          <code className="rounded bg-muted px-2 py-1 text-xs break-all">
+                            {getPixKeyDisplay(withdrawal)}
+                          </code>
+
+                          {withdrawal.pix_key && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                copyText(withdrawal.pix_key || "");
+                                toast({
+                                  title: "Copied",
+                                  description: "PIX key copied to clipboard",
+                                });
+                              }}
+                            >
+                              Copy
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
 
@@ -433,17 +473,19 @@ export default function WalletAdmin() {
 
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isUpdatingId === withdrawal.id}
-                            onClick={() =>
-                              updateWithdrawalStatus(withdrawal, "approved")
-                            }
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
+                          {withdrawal.status !== "approved" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isUpdatingId === withdrawal.id}
+                              onClick={() =>
+                                updateWithdrawalStatus(withdrawal, "approved")
+                              }
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Approve
+                            </Button>
+                          )}
 
                           <Button
                             variant="outline"
@@ -454,7 +496,7 @@ export default function WalletAdmin() {
                             }
                           >
                             <Wallet className="h-4 w-4 mr-1" />
-                            Paid
+                            Mark Paid
                           </Button>
 
                           <Button
@@ -481,16 +523,16 @@ export default function WalletAdmin() {
 
       <Card className="bg-gradient-card border-border">
         <CardHeader>
-          <CardTitle>All Withdrawal Requests</CardTitle>
+          <CardTitle>Completed Withdrawal Requests</CardTitle>
           <CardDescription>
-            Full withdrawal history across creators.
+            Paid and rejected withdrawal history across creators.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          {withdrawals.length === 0 ? (
+          {completedWithdrawals.length === 0 ? (
             <p className="text-center text-muted-foreground py-10">
-              No withdrawal records yet
+              No completed withdrawals yet
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -499,14 +541,14 @@ export default function WalletAdmin() {
                   <TableRow>
                     <TableHead>Creator</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>PIX Hint</TableHead>
+                    <TableHead>PIX Key</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Requested</TableHead>
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {withdrawals.map((withdrawal) => (
+                  {completedWithdrawals.map((withdrawal) => (
                     <TableRow key={withdrawal.id}>
                       <TableCell>
                         <div className="font-medium">
@@ -524,7 +566,28 @@ export default function WalletAdmin() {
                       </TableCell>
 
                       <TableCell>
-                        {withdrawal.pix_key || "Stored securely"}
+                        <div className="flex items-center gap-2 max-w-[320px]">
+                          <code className="rounded bg-muted px-2 py-1 text-xs break-all">
+                            {getPixKeyDisplay(withdrawal)}
+                          </code>
+
+                          {withdrawal.pix_key && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                copyText(withdrawal.pix_key || "");
+                                toast({
+                                  title: "Copied",
+                                  description: "PIX key copied to clipboard",
+                                });
+                              }}
+                            >
+                              Copy
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
 
                       <TableCell>
@@ -545,4 +608,6 @@ export default function WalletAdmin() {
     </div>
   );
 }
+
+
 

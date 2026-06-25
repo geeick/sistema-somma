@@ -1,65 +1,98 @@
 import { useEffect, useState } from "react";
 import apiClient from "@/integrations/apiClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Video } from "lucide-react";
-import { SheetMetric, findMetricForUrl, computePayoutFromPlays } from "@/hooks/useSheetMetrics";
+import { DollarSign, Video, Wallet, Clock } from "lucide-react";
 
 interface StatsCardsProps {
   userId?: string;
-  sheetMetrics?: SheetMetric[];
+  refreshKey?: number;
+}
+
+interface ProfileSummary {
+  total_earnings?: number | string | null;
+  balance_total?: number | string | null;
+  balance_available?: number | string | null;
+  pending_withdrawals?: number | string | null;
 }
 
 interface Submission {
-  payment_amount: number | null;
-  status: string;
-  post_url: string | null;
+  id: string;
+  status: string | null;
 }
 
-export const StatsCards = ({ userId, sheetMetrics = [] }: StatsCardsProps) => {
+function toNumber(value: number | string | null | undefined) {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function formatMoney(value: number | string | null | undefined) {
+  return toNumber(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export const StatsCards = ({ userId, refreshKey = 0 }: StatsCardsProps) => {
+  const [profile, setProfile] = useState<ProfileSummary | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
 
   useEffect(() => {
     if (!userId) return;
-    const fetchSubmissions = async () => {
+
+    const fetchStats = async () => {
       try {
-        const data = await apiClient.tables.list('submissions', { user_id: userId });
-        setSubmissions(data || []);
+        const [profileData, submissionsData] = await Promise.all([
+          apiClient.wallet.profile(),
+          apiClient.tables.list("submissions", { user_id: userId }),
+        ]);
+
+        setProfile(profileData || null);
+        setSubmissions(submissionsData || []);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load dashboard stats:", err);
       }
     };
 
-    fetchSubmissions();
-    // Note: realtime subscriptions are not implemented in the API shim; consider polling or server-sent events.
-  }, [userId]);
+    fetchStats();
+  }, [userId, refreshKey]);
 
-  const activeSubmissions = submissions.filter((v) => v.status !== "deleted");
-  const totalVideos = activeSubmissions.length;
+  const activeSubmissions = submissions.filter(
+    (submission) => String(submission.status || "").toLowerCase() !== "deleted"
+  );
 
-  // Calculate earnings from sheet metrics plays using tier table
-  const totalEarnings = activeSubmissions.reduce((sum, sub) => {
-    const metric = findMetricForUrl(sub.post_url, sheetMetrics);
-    const plays = metric?.plays || 0;
-    return sum + computePayoutFromPlays(plays);
-  }, 0);
+  const totalEarnings = profile?.balance_total ?? profile?.total_earnings ?? 0;
+  const available = profile?.balance_available ?? 0;
+  const pendingWithdrawals = profile?.pending_withdrawals ?? 0;
 
   const statCards = [
     {
       title: "Total Earnings",
-      value: `R$ ${totalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      value: `R$ ${formatMoney(totalEarnings)}`,
       icon: DollarSign,
       color: "text-green-500",
     },
     {
+      title: "Available Now",
+      value: `R$ ${formatMoney(available)}`,
+      icon: Wallet,
+      color: "text-green-500",
+    },
+    {
       title: "Total Videos",
-      value: totalVideos.toString(),
+      value: activeSubmissions.length.toString(),
       icon: Video,
       color: "text-primary",
+    },
+    {
+      title: "Pending Withdrawals",
+      value: `R$ ${formatMoney(pendingWithdrawals)}`,
+      icon: Clock,
+      color: "text-yellow-500",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
       {statCards.map((stat) => (
         <Card key={stat.title} className="bg-gradient-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">

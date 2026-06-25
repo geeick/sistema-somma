@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { getNeonAccessToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -6,13 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ExternalLink, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 interface UploadVideoProps {
   userId?: string;
+  fixedCampaignId?: string;
+  fixedCampaign?: Partial<Campaign> | null;
+  showCampaignDetailsLink?: boolean;
 }
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+
+const submissionSchema = z.object({
+  campaignId: z.string().uuid("Please select a campaign"),
+  pageId: z.string().min(1, "Please select one of your approved pages"),
+  postUrl: z.string().trim().url("Invalid post URL").max(500, "URL must be less than 500 characters"),
+  platform: z.enum(["instagram", "tiktok", "youtube_shorts"]),
+  audioUrl: z.string().trim().url("Invalid audio URL").optional().or(z.literal("")),
+  tiktokVideoId: z.string().optional(),
+});
 
 interface Campaign {
   id: string;
@@ -20,33 +36,43 @@ interface Campaign {
   status: string;
   end_date: string;
   platforms?: string[] | string | null;
-  audio_url?: string | any;
+  required_tags?: string[] | string | null;
+  audio_url?: string | null;
 }
 
 interface Page {
   id: string;
   platform: "instagram" | "tiktok" | "youtube_shorts";
-  handle: string | null;
+  handle: string;
   url: string | null;
   verified?: boolean | null;
+  tags?: string[] | string | null;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-const submissionSchema = z.object({
-  campaignId: z.string().uuid("Please select a campaign"),
-  pageId: z.string().min(1, "Please select one of your approved pages"),
-  postUrl: z.string().trim().url("Invalid post URL").max(500, "URL must be less than 500 characters"),
-  audioUrl: z.string().trim().url("Invalid audio URL").optional().or(z.literal("")),
-});
+interface TikTokVideo {
+  id: string;
+  title?: string | null;
+  video_description?: string | null;
+  share_url?: string | null;
+  cover_image_url?: string | null;
+  like_count?: number | null;
+  comment_count?: number | null;
+  share_count?: number | null;
+  view_count?: number | null;
+  create_time?: number | string | null;
+}
 
 function normalizeList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string");
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === "string");
+      }
     } catch {
       return value
         .split(",")
@@ -59,128 +85,229 @@ function normalizeList(value: unknown): string[] {
 }
 
 function normalizePlatform(platform?: string | null) {
-  if (!platform) return "unknown";
+  if (!platform) return "platform";
   return platform.replace("_", " ");
 }
 
-function urlLooksLikePlatform(postUrl: string, platform: string) {
-  try {
-    const url = new URL(postUrl);
-    const host = url.hostname.toLowerCase();
-
-    if (platform === "instagram") {
-      return host.includes("instagram.com");
-    }
-
-    if (platform === "tiktok") {
-      return host.includes("tiktok.com");
-    }
-
-    if (platform === "youtube_shorts") {
-      return host.includes("youtube.com") || host.includes("youtu.be");
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
+function formatCount(value: number | null | undefined) {
+  const count = Number(value || 0);
+  return count.toLocaleString("pt-BR");
 }
 
-export const UploadVideo = ({ userId }: UploadVideoProps) => {
+function getVideoLabel(video: TikTokVideo) {
+  return (
+    video.title ||
+    video.video_description ||
+    video.share_url ||
+    `TikTok video ${video.id}`
+  );
+}
+
+function pageMatchesRequiredTags(page: Page, requiredTags: string[]) {
+  if (requiredTags.length === 0) return true;
+
+  const pageTags = normalizeList(page.tags).map((tag) => tag.toLowerCase());
+  return requiredTags.some((tag) => pageTags.includes(tag.toLowerCase()));
+}
+
+export const UploadVideo = ({
+  userId,
+  fixedCampaignId,
+  fixedCampaign,
+  showCampaignDetailsLink = true,
+}: UploadVideoProps) => {
+  const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
-  const [selectedCampaign, setSelectedCampaign] = useState<string>("");
-  const [selectedPageId, setSelectedPageId] = useState<string>("");
+  const [selectedCampaign, setSelectedCampaign] = useState<string>(fixedCampaignId || "");
+  const [platform, setPlatform] = useState<"instagram" | "tiktok" | "youtube_shorts" | "">("");
+  const [selectedPageId, setSelectedPageId] = useState("");
   const [postUrl, setPostUrl] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
 
-  const approvedPages = useMemo(() => {
-    return pages.filter((page) => page.verified === true);
-  }, [pages]);
+  const [tiktokVideos, setTikTokVideos] = useState<TikTokVideo[]>([]);
+  const [selectedTikTokVideoId, setSelectedTikTokVideoId] = useState("");
+  const [isLoadingTikTokVideos, setIsLoadingTikTokVideos] = useState(false);
 
-  const selectedPage = useMemo(() => {
-    return approvedPages.find((page) => page.id === selectedPageId) || null;
-  }, [approvedPages, selectedPageId]);
+  const selectedCampaignData =
+    campaigns.find((campaign) => campaign.id === selectedCampaign) ||
+    (fixedCampaignId && fixedCampaign?.id === fixedCampaignId ? (fixedCampaign as Campaign) : null);
 
-  const selectedCampaignData = useMemo(() => {
-    return campaigns.find((campaign) => campaign.id === selectedCampaign) || null;
-  }, [campaigns, selectedCampaign]);
+  const selectedTikTokVideo = tiktokVideos.find((video) => video.id === selectedTikTokVideoId) || null;
+  const selectedCampaignRequiredTags = normalizeList(selectedCampaignData?.required_tags);
+  const selectedCampaignPlatforms = normalizeList(selectedCampaignData?.platforms);
 
-  const campaignPlatforms = useMemo(() => {
-    return normalizeList(selectedCampaignData?.platforms);
-  }, [selectedCampaignData]);
+  const rawApprovedPages = pages.filter((page) => {
+    if (!platform) return false;
+    return page.platform === platform && page.verified === true;
+  });
 
-  const eligiblePages = useMemo(() => {
-    if (campaignPlatforms.length === 0) return approvedPages;
+  const approvedPages = rawApprovedPages.filter((page) =>
+    pageMatchesRequiredTags(page, selectedCampaignRequiredTags)
+  );
 
-    return approvedPages.filter((page) => campaignPlatforms.includes(page.platform));
-  }, [approvedPages, campaignPlatforms]);
+  const allowedCampaigns = campaigns.filter((campaign) => {
+    if (!platform) return true;
+
+    const allowedPlatforms = normalizeList(campaign.platforms);
+    return allowedPlatforms.length === 0 || allowedPlatforms.includes(platform);
+  });
+
+  const fetchCampaigns = async () => {
+    try {
+      const data = await apiClient.campaigns.active();
+      const activeCampaigns = Array.isArray(data) ? data : [];
+
+      if (fixedCampaign && fixedCampaignId && !activeCampaigns.some((item: Campaign) => item.id === fixedCampaignId)) {
+        setCampaigns([fixedCampaign as Campaign, ...activeCampaigns]);
+      } else {
+        setCampaigns(activeCampaigns);
+      }
+    } catch (err) {
+      console.error("Error fetching campaigns:", err);
+      if (fixedCampaign && fixedCampaignId) {
+        setCampaigns([fixedCampaign as Campaign]);
+      } else {
+        toast.error("Failed to load campaigns");
+      }
+    }
+  };
+
+  const fetchPages = async () => {
+    try {
+      const data = await apiClient.pages.list();
+      setPages(data || []);
+    } catch (err) {
+      console.error("Error fetching pages:", err);
+      toast.error("Failed to load approved pages");
+    }
+  };
+
+  const fetchTikTokVideos = async () => {
+    if (!userId) return;
+
+    setIsLoadingTikTokVideos(true);
+
+    try {
+      const token = await getNeonAccessToken();
+
+      if (!token) {
+        throw new Error("Missing login token. Please sign out and sign in again.");
+      }
+
+      const response = await fetch(`${API_BASE}/api/tiktok/videos`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error || json.details || "Failed to load TikTok videos");
+      }
+
+      const videos = Array.isArray(json.data) ? json.data : [];
+      setTikTokVideos(videos);
+
+      if (videos.length === 0) {
+        toast.info("TikTok connected, but no public videos were returned.");
+      }
+    } catch (err: any) {
+      console.error("TikTok videos error:", err);
+      toast.error(err.message || "Failed to load TikTok videos");
+      setTikTokVideos([]);
+    } finally {
+      setIsLoadingTikTokVideos(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [campaignData, pageData] = await Promise.all([
-          apiClient.campaigns.active(),
-          apiClient.pages.list(),
-        ]);
-
-        setCampaigns(campaignData || []);
-        setPages(pageData || []);
-      } catch (err) {
-        console.error("Error fetching upload data:", err);
-        toast.error("Failed to load campaigns or approved pages");
-      }
-    };
-
-    fetchData();
+    fetchCampaigns();
+    fetchPages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (fixedCampaignId) {
+      setSelectedCampaign(fixedCampaignId);
+    }
+  }, [fixedCampaignId]);
+
+  useEffect(() => {
+    if (!fixedCampaignId || !fixedCampaign) return;
+
+    setCampaigns((current) => {
+      const existing = current.filter((campaign) => campaign.id !== fixedCampaignId);
+      return [fixedCampaign as Campaign, ...existing];
+    });
+  }, [fixedCampaignId, fixedCampaign]);
+
+  useEffect(() => {
+    setSelectedPageId("");
+    setPostUrl("");
+    setSelectedTikTokVideoId("");
+    setTikTokVideos([]);
+
+    if (platform === "tiktok") {
+      fetchTikTokVideos();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform]);
+
+  useEffect(() => {
+    if (fixedCampaignId || !platform || !selectedCampaign) return;
+
+    const campaign = campaigns.find((item) => item.id === selectedCampaign);
+    const allowedPlatforms = normalizeList(campaign?.platforms);
+
+    if (allowedPlatforms.length > 0 && !allowedPlatforms.includes(platform)) {
+      setSelectedCampaign("");
+    }
+  }, [campaigns, fixedCampaignId, platform, selectedCampaign]);
 
   useEffect(() => {
     if (!selectedPageId) return;
 
-    const stillEligible = eligiblePages.some((page) => page.id === selectedPageId);
+    const stillAllowed = approvedPages.some((page) => page.id === selectedPageId);
+    if (!stillAllowed) setSelectedPageId("");
+  }, [approvedPages, selectedPageId]);
 
-    if (!stillEligible) {
-      setSelectedPageId("");
+  const handleTikTokVideoChange = (videoId: string) => {
+    setSelectedTikTokVideoId(videoId);
+
+    const video = tiktokVideos.find((item) => item.id === videoId);
+    const url = video?.share_url || "";
+
+    if (url) {
+      setPostUrl(url);
     }
-  }, [eligiblePages, selectedPageId]);
-
-  const submitToBackend = async (payload: {
-    campaign_id: string;
-    page_id: string;
-    post_url: string;
-    audio_url?: string;
-  }) => {
-    const token = await getNeonAccessToken();
-
-    if (!token) {
-      throw new Error("You must be logged in to submit");
-    }
-
-    const res = await fetch(`${API_BASE}/api/submissions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      throw new Error(json?.error || json?.message || "Failed to submit");
-    }
-
-    return json?.data;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
     if (!userId) {
       toast.error("You must be logged in to submit");
+      return;
+    }
+
+    const selectedPage = pages.find((page) => page.id === selectedPageId);
+
+    if (!selectedPage || selectedPage.verified !== true) {
+      toast.error("Select one of your approved pages before submitting.");
+      return;
+    }
+
+    if (!pageMatchesRequiredTags(selectedPage, selectedCampaignRequiredTags)) {
+      toast.error("The selected page does not match this campaign's required tags.");
+      return;
+    }
+
+    if (platform === "tiktok" && !selectedTikTokVideoId) {
+      toast.error("Choose one of your authorized TikTok videos.");
       return;
     }
 
@@ -189,16 +316,14 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
         campaignId: selectedCampaign,
         pageId: selectedPageId,
         postUrl,
+        platform,
         audioUrl: audioUrl || undefined,
+        tiktokVideoId: selectedTikTokVideoId || undefined,
       });
 
-      const campaign = campaigns.find((c) => c.id === validated.campaignId);
-      const page = approvedPages.find((p) => p.id === validated.pageId);
+      setIsUploading(true);
 
-      if (!page) {
-        toast.error("You must choose one of your approved pages before submitting");
-        return;
-      }
+      const campaign = campaigns.find((item) => item.id === validated.campaignId);
 
       if (campaign && new Date(campaign.end_date) < new Date()) {
         toast.error("This campaign has ended and is no longer accepting submissions");
@@ -207,39 +332,52 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
 
       const allowedPlatforms = normalizeList(campaign?.platforms);
 
-      if (allowedPlatforms.length > 0 && !allowedPlatforms.includes(page.platform)) {
-        toast.error(`This campaign does not accept ${normalizePlatform(page.platform)} submissions`);
+      if (
+        allowedPlatforms.length > 0 &&
+        !allowedPlatforms.includes(selectedPage.platform)
+      ) {
+        toast.error(`This campaign does not accept ${selectedPage.platform} submissions`);
         return;
       }
 
-      if (!urlLooksLikePlatform(validated.postUrl, page.platform)) {
-        toast.error(`The post URL must match the selected page platform: ${normalizePlatform(page.platform)}`);
-        return;
-      }
-
-      setIsUploading(true);
-
-      const inserted = await submitToBackend({
-        campaign_id: validated.campaignId,
-        page_id: validated.pageId,
-        post_url: validated.postUrl,
-        audio_url: validated.audioUrl || undefined,
+      const response = await fetch(`${API_BASE}/api/submissions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await getNeonAccessToken()}`,
+        },
+        body: JSON.stringify({
+          campaign_id: validated.campaignId,
+          page_id: validated.pageId,
+          post_url: validated.postUrl,
+          audio_url: validated.audioUrl || null,
+          tiktok_video_id: validated.tiktokVideoId || null,
+        }),
       });
 
-      if (!inserted) throw new Error("Insert failed");
+      const json = await response.json();
 
-      toast.success("Submission uploaded and pending approval!");
+      if (!response.ok) {
+        throw new Error(json.error || json.details || "Failed to create submission");
+      }
 
-      setSelectedCampaign("");
+      toast.success("Submission uploaded for review!");
+
+      if (!fixedCampaignId) {
+        setSelectedCampaign("");
+      }
+      setPlatform("");
       setSelectedPageId("");
       setPostUrl("");
       setAudioUrl("");
-    } catch (error) {
+      setSelectedTikTokVideoId("");
+      setTikTokVideos([]);
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
         console.error("Submission error:", error);
-        toast.error(error instanceof Error ? error.message : "Failed to submit");
+        toast.error(error.message || "Failed to submit");
       }
     } finally {
       setIsUploading(false);
@@ -256,13 +394,20 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
       </CardHeader>
 
       <CardContent>
-        {approvedPages.length === 0 ? (
-          <div className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
-            You do not have any approved pages yet. Add a page first, then wait
-            for it to be verified before submitting campaign content.
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {fixedCampaignId ? (
+            <div className="space-y-2">
+              <Label>Campaign</Label>
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
+                <p className="font-medium">{selectedCampaignData?.title || "Selected campaign"}</p>
+                {selectedCampaignData?.end_date && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Ends {new Date(selectedCampaignData.end_date).toLocaleDateString("pt-BR")}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
             <div className="space-y-2">
               <Label htmlFor="campaign">Campaign *</Label>
               <Select value={selectedCampaign} onValueChange={setSelectedCampaign} required>
@@ -270,12 +415,12 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
                   <SelectValue placeholder="Select a campaign" />
                 </SelectTrigger>
                 <SelectContent>
-                  {campaigns.length === 0 ? (
+                  {allowedCampaigns.length === 0 ? (
                     <SelectItem value="_no_campaigns" disabled>
-                      No active campaigns available
+                      No active campaigns available for this platform
                     </SelectItem>
                   ) : (
-                    campaigns.map((campaign) => (
+                    allowedCampaigns.map((campaign) => (
                       <SelectItem key={campaign.id} value={campaign.id}>
                         {campaign.title}
                       </SelectItem>
@@ -283,8 +428,60 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
                   )}
                 </SelectContent>
               </Select>
-            </div>
 
+              {showCampaignDetailsLink && selectedCampaign && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => navigate(`/campaigns/${selectedCampaign}`)}
+                >
+                  View campaign details
+                </Button>
+              )}
+            </div>
+          )}
+
+          {selectedCampaignData && selectedCampaignRequiredTags.length > 0 && (
+            <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Required tags</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedCampaignRequiredTags.map((tag) => (
+                  <Badge key={tag} variant="secondary">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="platform">Platform *</Label>
+            <Select
+              value={platform}
+              onValueChange={(value) =>
+                setPlatform(value as "instagram" | "tiktok" | "youtube_shorts")
+              }
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select platform" />
+              </SelectTrigger>
+              <SelectContent>
+                {(selectedCampaignPlatforms.length === 0 || selectedCampaignPlatforms.includes("instagram")) && (
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                )}
+                {(selectedCampaignPlatforms.length === 0 || selectedCampaignPlatforms.includes("tiktok")) && (
+                  <SelectItem value="tiktok">TikTok</SelectItem>
+                )}
+                {(selectedCampaignPlatforms.length === 0 || selectedCampaignPlatforms.includes("youtube_shorts")) && (
+                  <SelectItem value="youtube_shorts">YouTube Shorts</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {platform && (
             <div className="space-y-2">
               <Label htmlFor="page">Approved Page *</Label>
               <Select value={selectedPageId} onValueChange={setSelectedPageId} required>
@@ -292,35 +489,122 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
                   <SelectValue placeholder="Select one of your approved pages" />
                 </SelectTrigger>
                 <SelectContent>
-                  {eligiblePages.length === 0 ? (
+                  {approvedPages.length === 0 ? (
                     <SelectItem value="_no_pages" disabled>
-                      No approved pages match this campaign
+                      No eligible approved {normalizePlatform(platform)} pages found
                     </SelectItem>
                   ) : (
-                    eligiblePages.map((page) => (
+                    approvedPages.map((page) => (
                       <SelectItem key={page.id} value={page.id}>
-                        {page.handle || page.url || "Unnamed page"} · {normalizePlatform(page.platform)}
+                        {page.handle} · {page.platform}
                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
               </Select>
-              {selectedCampaign && campaignPlatforms.length > 0 && (
+              {approvedPages.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  This campaign accepts: {campaignPlatforms.map(normalizePlatform).join(", ")}
+                  Go to Pages and connect/verify this platform. If the campaign has required tags, your page must include at least one matching tag.
                 </p>
               )}
             </div>
+          )}
 
-            {selectedPage && (
-              <div className="rounded-lg border border-border p-3 text-sm">
-                <p className="font-medium">Selected page</p>
-                <p className="text-muted-foreground">
-                  {selectedPage.handle || selectedPage.url || "Unnamed page"} · {normalizePlatform(selectedPage.platform)}
-                </p>
+          {platform === "tiktok" ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="tiktokVideo">Authorized TikTok Video *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchTikTokVideos}
+                  disabled={isLoadingTikTokVideos}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
               </div>
-            )}
 
+              <Select
+                value={selectedTikTokVideoId}
+                onValueChange={handleTikTokVideoChange}
+                disabled={isLoadingTikTokVideos || tiktokVideos.length === 0}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      isLoadingTikTokVideos
+                        ? "Loading TikTok videos..."
+                        : "Choose a video from your connected TikTok"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiktokVideos.length === 0 ? (
+                    <SelectItem value="_no_tiktok_videos" disabled>
+                      No TikTok videos found
+                    </SelectItem>
+                  ) : (
+                    tiktokVideos.map((video) => (
+                      <SelectItem key={video.id} value={video.id}>
+                        {getVideoLabel(video).slice(0, 80)}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+
+              {selectedTikTokVideo && (
+                <Card className="bg-muted/40">
+                  <CardContent className="pt-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      {selectedTikTokVideo.cover_image_url && (
+                        <img
+                          src={selectedTikTokVideo.cover_image_url}
+                          alt="TikTok video cover"
+                          className="h-20 w-20 rounded-md object-cover"
+                        />
+                      )}
+
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="font-medium line-clamp-2">
+                          {getVideoLabel(selectedTikTokVideo)}
+                        </p>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="secondary">
+                            {formatCount(selectedTikTokVideo.view_count)} views
+                          </Badge>
+                          <Badge variant="secondary">
+                            {formatCount(selectedTikTokVideo.like_count)} likes
+                          </Badge>
+                          <Badge variant="secondary">
+                            {formatCount(selectedTikTokVideo.comment_count)} comments
+                          </Badge>
+                        </div>
+
+                        {selectedTikTokVideo.share_url && (
+                          <a
+                            href={selectedTikTokVideo.share_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                          >
+                            View on TikTok
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Input type="hidden" value={postUrl} readOnly />
+            </div>
+          ) : (
             <div className="space-y-2">
               <Label htmlFor="postUrl">Post URL *</Label>
               <Input
@@ -328,40 +612,51 @@ export const UploadVideo = ({ userId }: UploadVideoProps) => {
                 type="url"
                 placeholder="https://instagram.com/p/..."
                 value={postUrl}
-                onChange={(e) => setPostUrl(e.target.value)}
+                onChange={(event) => setPostUrl(event.target.value)}
                 required
                 maxLength={500}
               />
+              <p className="text-xs text-muted-foreground">
+                This URL must belong to the approved page selected above.
+              </p>
             </div>
+          )}
 
-            {selectedCampaignData?.audio_url && (
-              <div className="space-y-2">
-                <Label htmlFor="audioUrl">Audio URL (Optional)</Label>
-                <Input
-                  id="audioUrl"
-                  type="url"
-                  placeholder="Link to the audio used in your video..."
-                  value={audioUrl}
-                  onChange={(e) => setAudioUrl(e.target.value)}
-                  maxLength={500}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Provide the audio link if you used the campaign&apos;s required audio.
-                </p>
-              </div>
-            )}
+          {selectedCampaignData?.audio_url && (
+            <div className="space-y-2">
+              <Label htmlFor="audioUrl">Audio URL (Optional)</Label>
+              <Input
+                id="audioUrl"
+                type="url"
+                placeholder="Link to the audio used in your video..."
+                value={audioUrl}
+                onChange={(event) => setAudioUrl(event.target.value)}
+                maxLength={500}
+              />
+              <p className="text-xs text-muted-foreground">
+                Provide the audio link if you used the campaign's required audio.
+              </p>
+            </div>
+          )}
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isUploading || !selectedCampaign || !selectedPageId}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {isUploading ? "Submitting..." : "Submit Content"}
-            </Button>
-          </form>
-        )}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={
+              isUploading ||
+              !selectedCampaign ||
+              !platform ||
+              !selectedPageId ||
+              !postUrl ||
+              (platform === "tiktok" && !selectedTikTokVideoId)
+            }
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {isUploading ? "Submitting..." : "Submit Content"}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
 };
+

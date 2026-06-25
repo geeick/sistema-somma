@@ -22,6 +22,7 @@ interface Video {
 
 interface VideoListProps {
   userId?: string;
+  refreshKey?: number;
 }
 
 const platformIcons: Record<string, any> = {
@@ -75,7 +76,7 @@ function normalizeUsername(username: string | null | undefined) {
   return username.startsWith("@") ? username : `@${username}`;
 }
 
-export const VideoList = ({ userId }: VideoListProps) => {
+export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -108,9 +109,8 @@ export const VideoList = ({ userId }: VideoListProps) => {
 
   useEffect(() => {
     fetchVideos();
-
     return undefined;
-  }, [userId]);
+  }, [userId, refreshKey]);
 
   if (isLoading) {
     return <div>Loading videos...</div>;
@@ -248,3 +248,4 @@ export const VideoList = ({ userId }: VideoListProps) => {
     </div>
   );
 };
+

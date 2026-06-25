@@ -6,27 +6,29 @@ import { UploadVideo } from "@/components/UploadVideo";
 import { VideoList } from "@/components/VideoList";
 import { StatsCards } from "@/components/StatsCards";
 import { WalletDisplay } from "@/components/WalletDisplay";
-import { useSheetMetrics } from "@/hooks/useSheetMetrics";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<NeonUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { sheetMetrics, refetch: refetchMetrics } = useSheetMetrics();
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    getNeonSession().then(({ user }) => {
-      if (!user) {
-        navigate("/auth");
-      } else {
-        setUser(user);
-      }
-      setIsLoading(false);
-    }).catch(() => {
-      setIsLoading(false);
-      navigate("/auth");
-    });
+    getNeonSession()
+      .then(({ user }) => {
+        if (!user) {
+          navigate("/auth");
+        } else {
+          setUser(user);
+        }
+      })
+      .catch(() => navigate("/auth"))
+      .finally(() => setIsLoading(false));
   }, [navigate]);
+
+  const refreshDashboard = () => {
+    setRefreshKey((current) => current + 1);
+  };
 
   if (isLoading) {
     return (
@@ -43,20 +45,22 @@ const Dashboard = () => {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Creator Dashboard</h1>
           <p className="text-muted-foreground">
-            Upload your videos and track your earnings
+            Upload your videos, track approved earnings, and withdraw your balance.
           </p>
         </div>
 
-        <StatsCards userId={user?.id} sheetMetrics={sheetMetrics} />
-        
-        <WalletDisplay userId={user?.id} />
-        
+        <StatsCards userId={user?.id} refreshKey={refreshKey} />
+
+        <div className="mt-4">
+          <WalletDisplay userId={user?.id} refreshKey={refreshKey} />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
           <div className="lg:col-span-1">
-            <UploadVideo userId={user?.id} />
+            <UploadVideo userId={user?.id} onSubmissionCreated={refreshDashboard} />
           </div>
           <div className="lg:col-span-2">
-            <VideoList userId={user?.id} sheetMetrics={sheetMetrics} onMetricsRefresh={refetchMetrics} />
+            <VideoList userId={user?.id} refreshKey={refreshKey} />
           </div>
         </div>
       </div>
@@ -65,3 +69,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

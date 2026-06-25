@@ -1,8 +1,10 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { getNeonAccessToken, getNeonUser } from "@/lib/auth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -23,6 +25,96 @@ import SettingsAdmin from "./pages/admin/SettingsAdmin";
 import ErrorsAdmin from "./pages/admin/ErrorsAdmin";
 
 const queryClient = new QueryClient();
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+async function currentUserIsAdmin() {
+  const token = await getNeonAccessToken();
+
+  if (!token) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/admin/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const json = await response.json().catch(() => null);
+    return Boolean(json?.data?.isAdmin);
+  } catch (error) {
+    console.error("Admin redirect check failed", error);
+    return false;
+  }
+}
+
+function AdminRedirect({
+  children,
+  requireAuth = false,
+}: {
+  children: ReactNode;
+  requireAuth?: boolean;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function checkUserRole() {
+      setIsChecking(true);
+
+      try {
+        const user = await getNeonUser();
+
+        if (!user) {
+          if (requireAuth) {
+            navigate("/auth", { replace: true });
+            return;
+          }
+
+          if (isMounted) setIsChecking(false);
+          return;
+        }
+
+        const isAdmin = await currentUserIsAdmin();
+
+        if (isAdmin && !location.pathname.startsWith("/admin")) {
+          navigate("/admin", { replace: true });
+          return;
+        }
+
+        if (isMounted) setIsChecking(false);
+      } catch (error) {
+        console.error("Admin redirect failed", error);
+        if (isMounted) setIsChecking(false);
+      }
+    }
+
+    checkUserRole();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname, navigate, requireAuth]);
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -30,14 +122,63 @@ const App = () => (
       <Toaster />
       <Sonner />
       <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/campaigns" element={<Campaigns />} />
-        <Route path="/campaigns/:id" element={<CampaignDetail />} />
-        <Route path="/pages" element={<Pages />} />
-        <Route path="/wallet" element={<Wallet />} />
-        
+        <Route
+          path="/"
+          element={
+            <AdminRedirect>
+              <Index />
+            </AdminRedirect>
+          }
+        />
+        <Route
+          path="/auth"
+          element={
+            <AdminRedirect>
+              <Auth />
+            </AdminRedirect>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <AdminRedirect requireAuth>
+              <Dashboard />
+            </AdminRedirect>
+          }
+        />
+        <Route
+          path="/campaigns"
+          element={
+            <AdminRedirect requireAuth>
+              <Campaigns />
+            </AdminRedirect>
+          }
+        />
+        <Route
+          path="/campaigns/:id"
+          element={
+            <AdminRedirect requireAuth>
+              <CampaignDetail />
+            </AdminRedirect>
+          }
+        />
+        <Route
+          path="/pages"
+          element={
+            <AdminRedirect requireAuth>
+              <Pages />
+            </AdminRedirect>
+          }
+        />
+        <Route
+          path="/wallet"
+          element={
+            <AdminRedirect requireAuth>
+              <Wallet />
+            </AdminRedirect>
+          }
+        />
+
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
@@ -51,7 +192,7 @@ const App = () => (
           <Route path="errors" element={<ErrorsAdmin />} />
           <Route path="settings" element={<SettingsAdmin />} />
         </Route>
-        
+
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

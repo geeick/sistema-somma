@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { authClient, getNeonUser } from "@/lib/auth";
+import { authClient, getNeonAccessToken, getNeonUser } from "@/lib/auth";
 import apiClient from "@/integrations/apiClient";
 import { setAccessToken } from "@/integrations/auth";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,40 @@ import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { z } from "zod";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
 const authSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
   fullName: z.string().min(2, "Full name must be at least 2 characters").max(100).optional(),
 });
+
+async function getPostAuthRedirect(tokenFromAuth?: string | null) {
+  const token = tokenFromAuth || (await getNeonAccessToken());
+
+  if (!token) {
+    return "/dashboard";
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/admin/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      return "/dashboard";
+    }
+
+    const json = await response.json().catch(() => null);
+    return json?.data?.isAdmin ? "/admin" : "/dashboard";
+  } catch (error) {
+    console.error("Post-auth admin check failed", error);
+    return "/dashboard";
+  }
+}
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -26,16 +55,27 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
 
   useEffect(() => {
-    getNeonUser().then((user) => {
-      if (user) {
-        navigate("/dashboard");
-      }
-    }).catch(() => undefined);
+    let isMounted = true;
+
+    getNeonUser()
+      .then(async (user) => {
+        if (!user || !isMounted) return;
+
+        const redirectTo = await getPostAuthRedirect();
+        if (isMounted) {
+          navigate(redirectTo, { replace: true });
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
   }, [navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const validated = authSchema.parse({ email, password, fullName });
       setIsLoading(true);
@@ -64,8 +104,9 @@ const Auth = () => {
         await apiClient.pages.list().catch(() => undefined);
       } catch (_) {}
 
+      const redirectTo = await getPostAuthRedirect(token);
       toast.success('Account created successfully! Redirecting...');
-      navigate('/dashboard');
+      navigate(redirectTo, { replace: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -79,7 +120,7 @@ const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const validated = authSchema.parse({ email, password });
       setIsLoading(true);
@@ -103,8 +144,9 @@ const Auth = () => {
       // Trigger protected request to ensure server-side profile exists
       try { await apiClient.pages.list().catch(() => undefined); } catch {}
 
+      const redirectTo = await getPostAuthRedirect(token);
       toast.success("Signed in successfully!");
-      navigate('/dashboard');
+      navigate(redirectTo, { replace: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -133,7 +175,7 @@ const Auth = () => {
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
@@ -166,7 +208,7 @@ const Auth = () => {
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
@@ -221,3 +263,4 @@ const Auth = () => {
 };
 
 export default Auth;
+

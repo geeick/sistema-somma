@@ -1,51 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import {
-  AlertTriangle,
-  Clock,
-  DollarSign,
-  RefreshCw,
-  TrendingUp,
-  Wallet as WalletIcon,
-} from "lucide-react";
+import { Wallet as WalletIcon, TrendingUp, Clock } from "lucide-react";
 
 interface Profile {
-  total_earnings: number | string | null;
-  pix_key: string | null;
+  total_earnings?: number | string | null;
+  balance_total?: number | string | null;
+  balance_available?: number | string | null;
+  pending_withdrawals?: number | string | null;
+  paid_out?: number | string | null;
+  pix_key?: string | null;
 }
 
 interface Withdrawal {
   id: string;
-  amount: number | string | null;
+  amount: number | string;
   pix_key?: string | null;
-  status: string | null;
-  requested_at: string | null;
+  status: string;
+  requested_at: string;
 }
-
-const MIN_WITHDRAWAL = 25;
 
 function toNumber(value: number | string | null | undefined) {
   const num = Number(value || 0);
@@ -59,86 +41,44 @@ function formatMoney(value: number | string | null | undefined) {
   });
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "Not set";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "Not set";
-
-  return date.toLocaleDateString("pt-BR");
-}
-
-function getStatusClass(status: string | null | undefined) {
-  switch (status) {
-    case "requested":
-    case "pending":
-      return "bg-yellow-500 text-white";
-    case "approved":
-      return "bg-blue-500 text-white";
-    case "paid":
-      return "bg-green-500 text-white";
-    case "rejected":
-      return "bg-red-500 text-white";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
 const Wallet = () => {
   const navigate = useNavigate();
-
   const [user, setUser] = useState<NeonUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
-  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [pixKey, setPixKey] = useState("");
-  const [error, setError] = useState("");
 
-  const balance = useMemo(() => toNumber(profile?.total_earnings), [profile]);
+  const totalEarnings = toNumber(profile?.balance_total ?? profile?.total_earnings);
+  const available = toNumber(profile?.balance_available);
+  const pendingWithdrawals = toNumber(profile?.pending_withdrawals);
+  const paidOut = toNumber(profile?.paid_out);
 
-  const pendingAmount = useMemo(() => {
-    return withdrawals
-      .filter((withdrawal) =>
-        ["requested", "pending", "approved"].includes(withdrawal.status || "")
-      )
-      .reduce((sum, withdrawal) => sum + toNumber(withdrawal.amount), 0);
-  }, [withdrawals]);
-
-  const availableBalance = Math.max(balance - pendingAmount, 0);
-
-  const loadWalletData = async () => {
-    setIsLoadingData(true);
-    setError("");
-
+  const loadWallet = async () => {
     try {
       const [profileData, withdrawalsData] = await Promise.all([
         apiClient.wallet.profile(),
         apiClient.wallet.withdrawals(),
       ]);
 
-      setProfile(
-        profileData || {
-          total_earnings: 0,
-          pix_key: null,
-        }
-      );
+      setProfile(profileData || null);
+      setWithdrawals(withdrawalsData || []);
 
-      setWithdrawals(Array.isArray(withdrawalsData) ? withdrawalsData : []);
-    } catch (err: any) {
-      console.error("Failed to load wallet:", err);
-      setError(err.message || "Failed to load wallet data");
+      if (profileData?.pix_key) {
+        setPixKey(profileData.pix_key);
+      }
+    } catch (err) {
+      console.error("Wallet load error:", err);
       toast({
         title: "Error",
-        description: err.message || "Failed to load wallet data",
+        description: "Failed to load wallet data",
         variant: "destructive",
       });
     } finally {
-      setIsLoadingData(false);
+      setIsLoading(false);
     }
   };
 
@@ -149,97 +89,61 @@ const Wallet = () => {
           navigate("/auth");
           return;
         }
-
         setUser(currentUser);
       })
-      .catch(() => navigate("/auth"))
-      .finally(() => setIsLoadingUser(false));
+      .catch(() => navigate("/auth"));
   }, [navigate]);
 
   useEffect(() => {
     if (!user) return;
-    loadWalletData();
+    loadWallet();
   }, [user]);
 
   const handleRequestWithdrawal = async () => {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to request a withdrawal",
-        variant: "destructive",
-      });
+    if (!user || !amount || !pixKey) {
+      toast({ title: "Erro", description: "Por favor, preencha todos os campos", variant: "destructive" });
       return;
     }
 
     const amountNum = Number(amount);
 
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      toast({
-        title: "Erro",
-        description: "O valor deve ser maior que 0",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "O valor deve ser maior que 0", variant: "destructive" });
       return;
     }
 
-    if (amountNum < MIN_WITHDRAWAL) {
-      toast({
-        title: "Erro",
-        description: "O valor mínimo para saque é R$ 25,00",
-        variant: "destructive",
-      });
+    if (amountNum < 25) {
+      toast({ title: "Erro", description: "O valor mínimo para saque é R$ 25,00", variant: "destructive" });
       return;
     }
 
-    if (amountNum > availableBalance) {
-      toast({
-        title: "Erro",
-        description: "Saldo insuficiente",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!pixKey.trim()) {
-      toast({
-        title: "Erro",
-        description: "Por favor, informe sua chave PIX",
-        variant: "destructive",
-      });
+    if (amountNum > available) {
+      toast({ title: "Erro", description: "Saldo insuficiente", variant: "destructive" });
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await apiClient.wallet.requestWithdrawal({
-        amount: amountNum,
-        pix_key: pixKey.trim(),
-      });
-
-      toast({
-        title: "Success",
-        description: "Withdrawal requested successfully. We will process it soon.",
-      });
-
+      await apiClient.wallet.requestWithdrawal({ amount: amountNum, pix_key: pixKey });
+      toast({ title: "Success", description: "Withdrawal requested successfully. An admin will process it soon." });
       setIsDialogOpen(false);
       setAmount("");
-      setPixKey("");
-
-      await loadWalletData();
+      await loadWallet();
     } catch (err: any) {
-      console.error("Withdrawal request failed:", err);
-      toast({
-        title: "Error",
-        description: err.message || "Failed to request withdrawal",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: err.message || String(err), variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isLoading = isLoadingUser || isLoadingData;
+  const statusColors: Record<string, string> = {
+    requested: "bg-yellow-500",
+    pending: "bg-yellow-500",
+    approved: "bg-blue-500",
+    paid: "bg-green-500",
+    rejected: "bg-red-500",
+  };
 
   if (isLoading) {
     return (
@@ -255,9 +159,8 @@ const Wallet = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <Navbar />
-
       <div className="container mx-auto px-4 pt-24 pb-12">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-6">
           <div>
             <h1 className="text-4xl font-bold mb-2">Wallet</h1>
             <p className="text-muted-foreground">
@@ -265,111 +168,77 @@ const Wallet = () => {
             </p>
           </div>
 
-          {error && (
-            <Card className="bg-gradient-card border-border">
-              <CardContent className="pt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="h-5 w-5 text-destructive" />
-                  <div>
-                    <p className="font-semibold">Could not load all wallet data</p>
-                    <p className="text-sm text-muted-foreground">{error}</p>
-                  </div>
-                </div>
-
-                <Button variant="outline" onClick={loadWalletData}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Try again
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
           <div className="grid md:grid-cols-2 gap-4">
             <Card className="bg-gradient-card border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Total Earnings
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Total Approved Earnings</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-
               <CardContent>
                 <div className="text-3xl font-bold text-primary">
-                  R$ {formatMoney(balance)}
+                  R$ {formatMoney(totalEarnings)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  All-time earnings.
+                  Approved and paid submissions only.
                 </p>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-card border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Available Balance
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
                 <WalletIcon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-
               <CardContent>
                 <div className="text-3xl font-bold">
-                  R$ {formatMoney(availableBalance)}
+                  R$ {formatMoney(available)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Pending withdrawals are excluded.
+                  Pending and paid withdrawals are excluded.
                 </p>
-
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="mt-4 w-full" disabled={availableBalance < MIN_WITHDRAWAL}>
+                    <Button className="mt-4 w-full" disabled={available < 25}>
                       Request Withdrawal
                     </Button>
                   </DialogTrigger>
-
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Request Withdrawal via PIX</DialogTitle>
                       <DialogDescription>
-                        Enter the amount and your PIX key. The backend should store
-                        only a masked version, not the raw key.
+                        Enter the amount and your PIX key. The full PIX key is not returned to the browser after saving.
                       </DialogDescription>
                     </DialogHeader>
-
                     <div className="space-y-4">
                       <div>
                         <Label>Valor (R$)</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          min={MIN_WITHDRAWAL}
+                          min="25"
+                          max={available}
                           placeholder="Mínimo: R$ 25,00"
                           value={amount}
-                          onChange={(event) => setAmount(event.target.value)}
+                          onChange={(e) => setAmount(e.target.value)}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Available: R$ {formatMoney(availableBalance)}
+                          Disponível: R$ {formatMoney(available)}. Valor mínimo: R$ 25,00.
                         </p>
                       </div>
-
                       <div>
                         <Label>PIX Key</Label>
                         <Input
                           placeholder="CPF, email, phone, or random PIX key"
                           value={pixKey}
-                          onChange={(event) => setPixKey(event.target.value)}
+                          onChange={(e) => setPixKey(e.target.value)}
                         />
                         {profile?.pix_key && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Saved PIX hint: {profile.pix_key}
+                            Saved key on file: {profile.pix_key}. Type a full key to update it.
                           </p>
                         )}
                       </div>
-
-                      <Button
-                        onClick={handleRequestWithdrawal}
-                        className="w-full"
-                        disabled={isSubmitting}
-                      >
+                      <Button onClick={handleRequestWithdrawal} className="w-full" disabled={isSubmitting}>
                         {isSubmitting ? "Submitting..." : "Submit Request"}
                       </Button>
                     </div>
@@ -377,40 +246,55 @@ const Wallet = () => {
                 </Dialog>
               </CardContent>
             </Card>
+
+            <Card className="bg-gradient-card border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Withdrawals</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">
+                  R$ {formatMoney(pendingWithdrawals)}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-card border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Paid Out</CardTitle>
+                <WalletIcon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">
+                  R$ {formatMoney(paidOut)}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <Card className="bg-gradient-card border-border">
             <CardHeader>
               <CardTitle>Withdrawal History</CardTitle>
-              <CardDescription>Track your withdrawal requests.</CardDescription>
+              <CardDescription>Track your withdrawal requests</CardDescription>
             </CardHeader>
-
             <CardContent>
               {withdrawals.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">
-                  No withdrawal requests yet
-                </p>
+                <p className="text-center text-muted-foreground py-8">No withdrawal requests yet</p>
               ) : (
                 <div className="space-y-4">
                   {withdrawals.map((withdrawal) => (
-                    <div
-                      key={withdrawal.id}
-                      className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between p-4 border border-border rounded-lg"
-                    >
+                    <div key={withdrawal.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
                       <div className="flex-1">
-                        <p className="font-semibold text-lg">
-                          R$ {formatMoney(withdrawal.amount)}
-                        </p>
+                        <p className="font-semibold text-lg">R$ {formatMoney(withdrawal.amount)}</p>
                         <p className="text-sm text-muted-foreground">
-                          Requested: {formatDate(withdrawal.requested_at)}
+                          {new Date(withdrawal.requested_at).toLocaleDateString()}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          PIX: {withdrawal.pix_key || "Stored securely"}
-                        </p>
+                        {withdrawal.pix_key && (
+                          <p className="text-sm text-muted-foreground">PIX: {withdrawal.pix_key}</p>
+                        )}
                       </div>
-
-                      <Badge className={`${getStatusClass(withdrawal.status)} w-fit`}>
-                        {withdrawal.status || "unknown"}
+                      <Badge className={`${statusColors[withdrawal.status] || "bg-muted"} text-white`}>
+                        {withdrawal.status}
                       </Badge>
                     </div>
                   ))}
@@ -421,16 +305,12 @@ const Wallet = () => {
 
           <Card className="bg-gradient-card border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-primary" />
-                Withdrawal Rules
-              </CardTitle>
+              <CardTitle>Withdrawal Rules</CardTitle>
             </CardHeader>
-
-            <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>Minimum withdrawal: R$ {formatMoney(MIN_WITHDRAWAL)}</p>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>Minimum withdrawal: R$ 25,00</p>
               <p>Requests start as pending and are processed by an admin.</p>
-              <p>PIX keys should be masked or encrypted on the backend.</p>
+              <p>Available balance subtracts requested, pending, approved, and paid withdrawals to prevent double withdrawals.</p>
             </CardContent>
           </Card>
         </div>
