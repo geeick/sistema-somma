@@ -32,17 +32,25 @@ const platformIcons: Record<string, any> = {
 };
 
 const platformColors: Record<string, string> = {
-  instagram: "text-pink-500",
+  instagram: "text-pink-700",
   tiktok: "text-foreground",
-  youtube_shorts: "text-red-500",
+  youtube_shorts: "text-red-700",
 };
 
 const statusColors: Record<string, string> = {
-  pending: "bg-yellow-500 text-white",
-  approved: "bg-green-500 text-white",
-  rejected: "bg-red-500 text-white",
-  paid: "bg-blue-500 text-white",
-  deleted: "bg-gray-500 text-white",
+  pending: "bg-yellow-600 text-white",
+  approved: "bg-green-700 text-white",
+  rejected: "bg-red-700 text-white",
+  paid: "bg-blue-700 text-white",
+  deleted: "bg-gray-600 text-white",
+};
+
+const statusLabels: Record<string, string> = {
+  pending: "Em análise",
+  approved: "Aprovado",
+  rejected: "Rejeitado",
+  paid: "Pago",
+  deleted: "Excluído",
 };
 
 function toNumber(value: number | string | null | undefined) {
@@ -62,13 +70,13 @@ function formatMoney(value: number | string | null | undefined) {
 }
 
 function formatDate(value: string | null | undefined) {
-  if (!value) return "Not set";
+  if (!value) return "Não informado";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "Not set";
+  if (Number.isNaN(date.getTime())) return "Não informado";
 
-  return date.toLocaleDateString();
+  return date.toLocaleDateString("pt-BR");
 }
 
 function normalizeUsername(username: string | null | undefined) {
@@ -101,7 +109,7 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
 
       setVideos(vids);
     } catch (err) {
-      console.error("Error fetching videos:", err);
+      console.error("Erro ao carregar vídeos:", err);
     } finally {
       setIsLoading(false);
     }
@@ -113,24 +121,24 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
   }, [userId, refreshKey]);
 
   if (isLoading) {
-    return <div>Loading videos...</div>;
+    return <div>Carregando vídeos...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">Your Videos</h2>
+        <h2 className="font-display text-3xl font-black">Envios recentes</h2>
 
-        <Button variant="outline" size="sm" onClick={fetchVideos}>
+        <Button variant="outline" size="sm" onClick={fetchVideos} className="rounded-full">
           <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+          Atualizar
         </Button>
       </div>
 
       {videos.length === 0 ? (
-        <Card className="bg-gradient-card border-border">
+        <Card className="somma-panel rounded-2xl">
           <CardContent className="pt-6 text-center text-muted-foreground">
-            No videos uploaded yet. Start uploading to earn!
+            Nenhum vídeo enviado ainda. Comece enviando conteúdo para participar das campanhas.
           </CardContent>
         </Card>
       ) : (
@@ -142,7 +150,7 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
               statusColors[video.status] || "bg-muted text-muted-foreground";
 
             return (
-              <Card key={video.id} className="bg-gradient-card border-border">
+              <Card key={video.id} className="somma-panel rounded-2xl">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -156,13 +164,13 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
 
                       <div>
                         <h3 className="font-semibold">
-                          {video.title || "Submission"}
+                          {video.title || "Envio"}
                         </h3>
 
                         <span
                           className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${statusClass}`}
                         >
-                          {video.status}
+                          {statusLabels[video.status] || video.status}
                         </span>
 
                         {video.post_url && (
@@ -172,7 +180,7 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
                             rel="noopener noreferrer"
                             className="text-xs text-primary hover:underline block mt-1"
                           >
-                            View Post
+                            Ver post
                           </a>
                         )}
                       </div>
@@ -191,21 +199,21 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">UserName</p>
+                      <p className="text-muted-foreground">Usuário</p>
                       <p className="font-medium">
                         {normalizeUsername(video.username)}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">Likes</p>
+                      <p className="text-muted-foreground">Curtidas</p>
                       <p className="font-medium">
                         {formatNumber(video.likes_count)}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">Plays</p>
+                      <p className="text-muted-foreground">Visualizações</p>
                       <p className="font-medium text-primary">
                         {formatNumber(video.views_count)}
                       </p>
@@ -214,26 +222,26 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
 
                   <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t border-border">
                     <div>
-                      <p className="text-muted-foreground">Earnings</p>
+                      <p className="text-muted-foreground">Ganhos</p>
                       <p className="font-medium text-primary">
                         R$ {formatMoney(video.payment_amount)}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">Uploaded</p>
+                      <p className="text-muted-foreground">Enviado em</p>
                       <p className="font-medium">{formatDate(uploadedAt)}</p>
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">Metrics Source</p>
+                      <p className="text-muted-foreground">Fonte das métricas</p>
                       <p className="font-medium">
-                        {video.metrics_source || "Not synced yet"}
+                        {video.metrics_source || "Ainda não sincronizado"}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">Last Synced</p>
+                      <p className="text-muted-foreground">Última sincronização</p>
                       <p className="font-medium">
                         {formatDate(video.metrics_synced_at)}
                       </p>
@@ -248,4 +256,3 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
     </div>
   );
 };
-
