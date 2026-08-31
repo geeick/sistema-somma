@@ -10,7 +10,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Campaigns from "./pages/Campaigns";
 import CampaignDetail from "./pages/CampaignDetail";
-import Pages from "./pages/Pages";
+import Pages from "./pages/PagesPro";
 import Wallet from "./pages/Wallet";
 import NotFound from "./pages/NotFound";
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -29,23 +29,14 @@ const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 async function currentUserIsAdmin() {
   const token = await getNeonAccessToken();
-
-  if (!token) {
-    return false;
-  }
+  if (!token) return false;
 
   try {
     const response = await fetch(`${API_BASE}/api/admin/me`, {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (!response.ok) {
-      return false;
-    }
-
+    if (!response.ok) return false;
     const json = await response.json().catch(() => null);
     return Boolean(json?.data?.isAdmin);
   } catch (error) {
@@ -54,13 +45,7 @@ async function currentUserIsAdmin() {
   }
 }
 
-function AdminRedirect({
-  children,
-  requireAuth = false,
-}: {
-  children: ReactNode;
-  requireAuth?: boolean;
-}) {
+function AdminRedirect({ children, requireAuth = false }: { children: ReactNode; requireAuth?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isChecking, setIsChecking] = useState(true);
@@ -70,27 +55,22 @@ function AdminRedirect({
 
     async function checkUserRole() {
       setIsChecking(true);
-
       try {
         const user = await getNeonUser();
-
         if (!user) {
           if (requireAuth) {
             navigate("/auth", { replace: true });
             return;
           }
-
           if (isMounted) setIsChecking(false);
           return;
         }
 
         const isAdmin = await currentUserIsAdmin();
-
         if (isAdmin && !location.pathname.startsWith("/admin")) {
           navigate("/admin", { replace: true });
           return;
         }
-
         if (isMounted) setIsChecking(false);
       } catch (error) {
         console.error("Admin redirect failed", error);
@@ -99,16 +79,13 @@ function AdminRedirect({
     }
 
     checkUserRole();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [location.pathname, navigate, requireAuth]);
 
   if (isChecking) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen somma-shell flex items-center justify-center">
+        <p className="text-muted-foreground font-semibold">Carregando...</p>
       </div>
     );
   }
@@ -122,64 +99,14 @@ const App = () => (
       <Toaster />
       <Sonner />
       <Routes>
-        <Route
-          path="/"
-          element={
-            <AdminRedirect>
-              <Index />
-            </AdminRedirect>
-          }
-        />
-        <Route
-          path="/auth"
-          element={
-            <AdminRedirect>
-              <Auth />
-            </AdminRedirect>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <AdminRedirect requireAuth>
-              <Dashboard />
-            </AdminRedirect>
-          }
-        />
-        <Route
-          path="/campaigns"
-          element={
-            <AdminRedirect requireAuth>
-              <Campaigns />
-            </AdminRedirect>
-          }
-        />
-        <Route
-          path="/campaigns/:id"
-          element={
-            <AdminRedirect requireAuth>
-              <CampaignDetail />
-            </AdminRedirect>
-          }
-        />
-        <Route
-          path="/pages"
-          element={
-            <AdminRedirect requireAuth>
-              <Pages />
-            </AdminRedirect>
-          }
-        />
-        <Route
-          path="/wallet"
-          element={
-            <AdminRedirect requireAuth>
-              <Wallet />
-            </AdminRedirect>
-          }
-        />
+        <Route path="/" element={<AdminRedirect><Index /></AdminRedirect>} />
+        <Route path="/auth" element={<AdminRedirect><Auth /></AdminRedirect>} />
+        <Route path="/dashboard" element={<AdminRedirect requireAuth><Dashboard /></AdminRedirect>} />
+        <Route path="/campaigns" element={<AdminRedirect requireAuth><Campaigns /></AdminRedirect>} />
+        <Route path="/campaigns/:id" element={<AdminRedirect requireAuth><CampaignDetail /></AdminRedirect>} />
+        <Route path="/pages" element={<AdminRedirect requireAuth><Pages /></AdminRedirect>} />
+        <Route path="/wallet" element={<AdminRedirect requireAuth><Wallet /></AdminRedirect>} />
 
-        {/* Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="campaigns" element={<CampaignsAdmin />} />
@@ -193,7 +120,6 @@ const App = () => (
           <Route path="settings" element={<SettingsAdmin />} />
         </Route>
 
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </TooltipProvider>
