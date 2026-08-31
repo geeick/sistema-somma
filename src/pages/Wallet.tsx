@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Wallet as WalletIcon, TrendingUp, Clock } from "lucide-react";
+import { Wallet as WalletIcon, TrendingUp, Clock, Sparkles } from "lucide-react";
 
 interface Profile {
   total_earnings?: number | string | null;
@@ -75,16 +75,10 @@ const Wallet = () => {
       setProfile(profileData || null);
       setWithdrawals(withdrawalsData || []);
 
-      if (profileData?.pix_key) {
-        setPixKey(profileData.pix_key);
-      }
+      if (profileData?.pix_key) setPixKey(profileData.pix_key);
     } catch (err) {
       console.error("Erro ao carregar carteira:", err);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar os dados da carteira.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Não foi possível carregar os dados da carteira.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -114,24 +108,20 @@ const Wallet = () => {
     }
 
     const amountNum = Number(amount);
-
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
       toast({ title: "Erro", description: "O valor deve ser maior que zero.", variant: "destructive" });
       return;
     }
-
     if (amountNum < 25) {
       toast({ title: "Erro", description: "O valor mínimo para saque é R$ 25,00.", variant: "destructive" });
       return;
     }
-
     if (amountNum > available) {
       toast({ title: "Erro", description: "Saldo insuficiente.", variant: "destructive" });
       return;
     }
 
     setIsSubmitting(true);
-
     try {
       await apiClient.wallet.requestWithdrawal({ amount: amountNum, pix_key: pixKey });
       toast({ title: "Sucesso", description: "Saque solicitado com sucesso. Um administrador processará em breve." });
@@ -155,172 +145,127 @@ const Wallet = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen somma-shell">
         <Navbar />
-        <div className="container mx-auto px-4 pt-24 pb-12">
-          <p className="text-center text-muted-foreground">Carregando carteira...</p>
+        <div className="container mx-auto px-4 pt-28 pb-12">
+          <p className="text-center text-muted-foreground font-semibold">Carregando carteira...</p>
         </div>
       </div>
     );
   }
 
+  const summaryCards = [
+    { title: "Ganhos aprovados", value: totalEarnings, note: "Somente envios aprovados e pagos.", icon: TrendingUp, accent: true },
+    { title: "Saldo disponível", value: available, note: "Saques pendentes e pagos já foram descontados.", icon: WalletIcon },
+    { title: "Saques pendentes", value: pendingWithdrawals, note: "Solicitações aguardando processamento.", icon: Clock },
+    { title: "Total pago", value: paidOut, note: "Valor já enviado para você.", icon: WalletIcon },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen somma-shell">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-12">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Carteira</h1>
-            <p className="text-muted-foreground">
-              Acompanhe seus ganhos e solicite saques via PIX.
-            </p>
+      <div className="container mx-auto px-4 pt-28 pb-16">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <section className="app-page-header">
+            <div className="app-eyebrow"><Sparkles className="h-4 w-4" /> Financeiro</div>
+            <h1 className="app-title">Carteira</h1>
+            <p className="app-subtitle">Acompanhe ganhos aprovados, saldo disponível e suas solicitações de saque via PIX.</p>
+          </section>
+
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 page-enter stagger-1">
+            {summaryCards.map(({ title, value, note, icon: Icon, accent }) => (
+              <Card key={title} className="somma-panel rounded-2xl min-h-[170px]">
+                <CardHeader className="flex flex-row items-start justify-between pb-3">
+                  <div>
+                    <CardTitle className="text-[0.95rem] font-bold">{title}</CardTitle>
+                    <CardDescription className="ui-caption mt-1">{note}</CardDescription>
+                  </div>
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className={`metric-value text-[2rem] ${accent ? "text-primary" : ""}`}>R$ {formatMoney(value)}</div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card className="bg-gradient-card border-border">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Ganhos aprovados totais</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-5 page-enter stagger-2">
+            <Card className="somma-panel rounded-2xl">
+              <CardHeader>
+                <CardTitle className="text-xl font-extrabold">Histórico de saques</CardTitle>
+                <CardDescription className="ui-caption">Acompanhe o status de cada solicitação.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-primary">
-                  R$ {formatMoney(totalEarnings)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Apenas envios aprovados e pagos entram neste total.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-card border-border">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Saldo disponível</CardTitle>
-                <WalletIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  R$ {formatMoney(available)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Saques pendentes e pagos já foram descontados.
-                </p>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="mt-4 w-full" disabled={available < 25}>
-                      Solicitar saque
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Solicitar saque via PIX</DialogTitle>
-                      <DialogDescription>
-                        Digite o valor e sua chave PIX. A chave completa não será exibida novamente depois de salva.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label>Valor (R$)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="25"
-                          max={available}
-                          placeholder="Mínimo: R$ 25,00"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Disponível: R$ {formatMoney(available)}. Valor mínimo: R$ 25,00.
-                        </p>
+                {withdrawals.length === 0 ? (
+                  <div className="empty-state min-h-[220px]">
+                    <Clock className="h-7 w-7 text-primary" />
+                    <p className="font-bold">Nenhuma solicitação de saque ainda</p>
+                    <p className="ui-caption max-w-md">Quando você solicitar um saque, o andamento aparecerá aqui.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {withdrawals.map((withdrawal) => (
+                      <div key={withdrawal.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-background/60">
+                        <div>
+                          <p className="font-extrabold text-lg">R$ {formatMoney(withdrawal.amount)}</p>
+                          <p className="ui-caption">{new Date(withdrawal.requested_at).toLocaleDateString("pt-BR")}</p>
+                          {withdrawal.pix_key && <p className="ui-caption">PIX: {withdrawal.pix_key}</p>}
+                        </div>
+                        <Badge className={`${statusColors[withdrawal.status] || "bg-muted"} text-white`}>{statusLabels[withdrawal.status] || withdrawal.status}</Badge>
                       </div>
-                      <div>
-                        <Label>Chave PIX</Label>
-                        <Input
-                          placeholder="CPF, e-mail, telefone ou chave aleatória PIX"
-                          value={pixKey}
-                          onChange={(e) => setPixKey(e.target.value)}
-                        />
-                        {profile?.pix_key && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Chave salva: {profile.pix_key}. Digite uma chave completa para atualizá-la.
-                          </p>
-                        )}
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-5">
+              <Card className="somma-dark-panel rounded-2xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-extrabold text-[#f7ead1]">Solicitar saque</CardTitle>
+                  <CardDescription className="text-[0.92rem] leading-relaxed text-[#f7ead1]/68">Disponível agora: R$ {formatMoney(available)}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full rounded-xl font-bold" disabled={available < 25}>Solicitar saque via PIX</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Solicitar saque via PIX</DialogTitle>
+                        <DialogDescription>Digite o valor e sua chave PIX. A chave completa não será exibida novamente depois de salva.</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Valor (R$)</Label>
+                          <Input type="number" step="0.01" min="25" max={available} placeholder="Mínimo: R$ 25,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                          <p className="ui-caption mt-1">Disponível: R$ {formatMoney(available)}. Valor mínimo: R$ 25,00.</p>
+                        </div>
+                        <div>
+                          <Label>Chave PIX</Label>
+                          <Input placeholder="CPF, e-mail, telefone ou chave aleatória PIX" value={pixKey} onChange={(e) => setPixKey(e.target.value)} />
+                          {profile?.pix_key && <p className="ui-caption mt-1">Chave salva: {profile.pix_key}. Digite uma chave completa para atualizá-la.</p>}
+                        </div>
+                        <Button onClick={handleRequestWithdrawal} className="w-full" disabled={isSubmitting}>{isSubmitting ? "Enviando..." : "Enviar solicitação"}</Button>
                       </div>
-                      <Button onClick={handleRequestWithdrawal} className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? "Enviando..." : "Enviar solicitação"}
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </CardContent>
-            </Card>
+                    </DialogContent>
+                  </Dialog>
+                  {available < 25 && <p className="mt-3 text-[0.88rem] leading-relaxed text-[#f7ead1]/60">O saldo mínimo para solicitar um saque é R$ 25,00.</p>}
+                </CardContent>
+              </Card>
 
-            <Card className="bg-gradient-card border-border">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Saques pendentes</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  R$ {formatMoney(pendingWithdrawals)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-card border-border">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total pago</CardTitle>
-                <WalletIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  R$ {formatMoney(paidOut)}
-                </div>
-              </CardContent>
-            </Card>
+              <Card className="somma-panel rounded-2xl">
+                <CardHeader><CardTitle className="text-lg font-extrabold">Regras de saque</CardTitle></CardHeader>
+                <CardContent className="space-y-2 ui-caption">
+                  <p>• Saque mínimo de R$ 25,00.</p>
+                  <p>• Solicitações são processadas por um administrador.</p>
+                  <p>• Valores solicitados, pendentes, aprovados e pagos são descontados do saldo disponível.</p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-
-          <Card className="bg-gradient-card border-border">
-            <CardHeader>
-              <CardTitle>Histórico de saques</CardTitle>
-              <CardDescription>Acompanhe suas solicitações de saque</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {withdrawals.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Nenhuma solicitação de saque ainda</p>
-              ) : (
-                <div className="space-y-4">
-                  {withdrawals.map((withdrawal) => (
-                    <div key={withdrawal.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-semibold text-lg">R$ {formatMoney(withdrawal.amount)}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(withdrawal.requested_at).toLocaleDateString("pt-BR")}
-                        </p>
-                        {withdrawal.pix_key && (
-                          <p className="text-sm text-muted-foreground">PIX: {withdrawal.pix_key}</p>
-                        )}
-                      </div>
-                      <Badge className={`${statusColors[withdrawal.status] || "bg-muted"} text-white`}>
-                        {statusLabels[withdrawal.status] || withdrawal.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-card border-border">
-            <CardHeader>
-              <CardTitle>Regras de saque</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>Saque mínimo: R$ 25,00</p>
-              <p>As solicitações começam como pendentes e são processadas por um administrador.</p>
-              <p>O saldo disponível desconta saques solicitados, pendentes, aprovados e pagos para evitar saques duplicados.</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
