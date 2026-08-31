@@ -15,9 +15,9 @@ import { z } from "zod";
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 const authSchema = z.object({
-  email: z.string().email("Invalid email address").max(255),
-  password: z.string().min(6, "Password must be at least 6 characters").max(100),
-  fullName: z.string().min(2, "Full name must be at least 2 characters").max(100).optional(),
+  email: z.string().email("Digite um e-mail válido").max(255),
+  password: z.string().min(6, "A senha precisa ter pelo menos 6 caracteres").max(100),
+  fullName: z.string().min(2, "O nome precisa ter pelo menos 2 caracteres").max(100).optional(),
 });
 
 async function getPostAuthRedirect(tokenFromAuth?: string | null) {
@@ -42,7 +42,7 @@ async function getPostAuthRedirect(tokenFromAuth?: string | null) {
     const json = await response.json().catch(() => null);
     return json?.data?.isAdmin ? "/admin" : "/dashboard";
   } catch (error) {
-    console.error("Post-auth admin check failed", error);
+    console.error("Falha ao verificar perfil administrativo", error);
     return "/dashboard";
   }
 }
@@ -82,36 +82,32 @@ const Auth = () => {
       const result = await authClient.signUp.email({
         email: validated.email,
         password: validated.password,
-        name: validated.fullName || validated.email.split('@')[0] || 'User',
+        name: validated.fullName || validated.email.split('@')[0] || 'Usuário',
       });
 
       if (result.error) {
-        toast.error(result.error.message || 'Signup failed');
-        console.error('Signup failed payload', result.error);
+        toast.error(result.error.message || 'Não foi possível criar a conta');
+        console.error('Falha no cadastro', result.error);
         return;
       }
 
-      // If the auth result returned an access token, store it for the
-      // server-side compatibility shim so requests include a Bearer token.
       const token = result?.data?.session?.access_token ?? result?.access_token ?? result?.data?.access_token;
       if (token) {
         try { setAccessToken(token); } catch {};
       }
 
-      // Trigger a protected request to the server so the server's verifyToken
-      // middleware creates the `profiles` row for this user.
       try {
         await apiClient.pages.list().catch(() => undefined);
       } catch (_) {}
 
       const redirectTo = await getPostAuthRedirect(token);
-      toast.success('Account created successfully! Redirecting...');
+      toast.success('Conta criada com sucesso. Redirecionando...');
       navigate(redirectTo, { replace: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
-        toast.error("Failed to create account");
+        toast.error("Não foi possível criar a conta");
       }
     } finally {
       setIsLoading(false);
@@ -135,23 +131,21 @@ const Auth = () => {
         return;
       }
 
-      // Store token if returned by adapter
       const token = result?.data?.session?.access_token ?? result?.access_token ?? result?.data?.access_token;
       if (token) {
         try { setAccessToken(token); } catch {}
       }
 
-      // Trigger protected request to ensure server-side profile exists
       try { await apiClient.pages.list().catch(() => undefined); } catch {}
 
       const redirectTo = await getPostAuthRedirect(token);
-      toast.success("Signed in successfully!");
+      toast.success("Entrada realizada com sucesso.");
       navigate(redirectTo, { replace: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
-        toast.error("Failed to sign in");
+        toast.error("Não foi possível entrar");
       }
     } finally {
       setIsLoading(false);
@@ -159,31 +153,44 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen somma-shell">
       <Navbar />
-      <div className="container mx-auto px-4 pt-32 pb-16 flex items-center justify-center">
-        <Card className="w-full max-w-md bg-gradient-card border-border">
+      <div className="container mx-auto px-4 pt-32 pb-16 grid lg:grid-cols-[0.95fr_1.05fr] gap-8 items-center">
+        <div className="hidden lg:block somma-dark-panel somma-grain rounded-[2rem] p-10 min-h-[520px] relative overflow-hidden">
+          <div className="relative z-10 max-w-md">
+            <p className="text-primary font-semibold mb-4">Área de acesso Somma</p>
+            <h1 className="font-display text-6xl font-black leading-[0.9] text-[#f7ead1] mb-6">
+              Entre no movimento.
+            </h1>
+            <p className="text-[#f7ead1]/78 text-lg">
+              Conecte páginas, participe de campanhas e acompanhe seus ganhos em um painel inspirado na cultura musical.
+            </p>
+          </div>
+          <div className="absolute -right-28 bottom-[-120px] h-96 w-96 rounded-full record-art" />
+        </div>
+
+        <Card className="w-full max-w-md mx-auto somma-panel rounded-[1.75rem]">
           <CardHeader>
-            <CardTitle className="text-2xl">Welcome to CreatorPay</CardTitle>
+            <CardTitle className="font-display text-3xl">Bem-vindo à Somma</CardTitle>
             <CardDescription>
-              Sign in to your account or create a new one to start earning
+              Entre na sua conta ou crie uma nova para começar a participar.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
-                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted">
+                <TabsTrigger value="signin" className="rounded-full">Entrar</TabsTrigger>
+                <TabsTrigger value="signup" className="rounded-full">Criar conta</TabsTrigger>
               </TabsList>
 
               <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
+                <form onSubmit={handleSignIn} className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
+                    <Label htmlFor="signin-email">E-mail</Label>
                     <Input
                       id="signin-email"
                       type="email"
-                      placeholder="you@example.com"
+                      placeholder="voce@exemplo.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -191,7 +198,7 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
+                    <Label htmlFor="signin-password">Senha</Label>
                     <Input
                       id="signin-password"
                       type="password"
@@ -203,20 +210,20 @@ const Auth = () => {
                       maxLength={100}
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Signing in..." : "Sign In"}
+                  <Button type="submit" className="w-full rounded-full" disabled={isLoading}>
+                    {isLoading ? "Entrando..." : "Entrar"}
                   </Button>
                 </form>
               </TabsContent>
 
               <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-4">
+                <form onSubmit={handleSignUp} className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
+                    <Label htmlFor="signup-name">Nome completo</Label>
                     <Input
                       id="signup-name"
                       type="text"
-                      placeholder="John Doe"
+                      placeholder="Seu nome"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
@@ -225,11 +232,11 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
+                    <Label htmlFor="signup-email">E-mail</Label>
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="you@example.com"
+                      placeholder="voce@exemplo.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -237,7 +244,7 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
+                    <Label htmlFor="signup-password">Senha</Label>
                     <Input
                       id="signup-password"
                       type="password"
@@ -249,8 +256,8 @@ const Auth = () => {
                       maxLength={100}
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Creating account..." : "Create Account"}
+                  <Button type="submit" className="w-full rounded-full" disabled={isLoading}>
+                    {isLoading ? "Criando conta..." : "Criar conta"}
                   </Button>
                 </form>
               </TabsContent>
@@ -263,4 +270,3 @@ const Auth = () => {
 };
 
 export default Auth;
-
