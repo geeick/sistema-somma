@@ -32,20 +32,21 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+      <div className="min-h-screen somma-shell flex items-center justify-center">
+        <div className="text-xl">Carregando...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen somma-shell">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-16">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Creator Dashboard</h1>
-          <p className="text-muted-foreground">
-            Upload your videos, track approved earnings, and withdraw your balance.
+      <div className="container mx-auto px-4 pt-28 pb-16">
+        <div className="mb-8 somma-dark-panel somma-grain rounded-[2rem] p-8">
+          <p className="text-primary font-semibold mb-2">Painel Somma</p>
+          <h1 className="font-display text-5xl font-black mb-3 text-[#f7ead1]">Painel do Criador</h1>
+          <p className="text-[#f7ead1]/75 max-w-2xl">
+            Envie conteúdos, acompanhe ganhos aprovados e solicite saques quando sua carteira estiver disponível.
           </p>
         </div>
 
