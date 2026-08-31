@@ -32,13 +32,15 @@
 
     --border: 32 29% 66%;
     --input: 37 42% 88%;
-    --ring: 32 91% 49%;
+    --ring: 327 94% 51%;
+    --somma-pink: 327 94% 51%;
 
-    --radius: 1rem;
+    --radius: 0.85rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(42 91% 59%), hsl(29 86% 47%), hsl(20 68% 33%));
+    --gradient-primary: linear-gradient(135deg, hsl(42 91% 59%), hsl(29 86% 47%), hsl(327 94% 51%));
     --gradient-card: linear-gradient(145deg, hsl(40 66% 96%), hsl(34 44% 86%));
-    --shadow-glow: 0 20px 70px hsl(27 73% 31% / 0.28);
+    --shadow-glow: 0 18px 56px hsl(27 73% 31% / 0.22);
+    --shadow-pink-glow: 0 16px 50px hsl(327 94% 51% / 0.32);
   }
 }
 
@@ -49,50 +51,70 @@
 
   html {
     scroll-behavior: smooth;
+    font-size: 93.75%;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background-image:
-      radial-gradient(circle at 20% 10%, hsl(42 91% 59% / 0.16), transparent 26rem),
-      radial-gradient(circle at 85% 18%, hsl(20 68% 33% / 0.18), transparent 24rem),
+      radial-gradient(circle at 20% 10%, hsl(327 94% 51% / 0.09), transparent 24rem),
+      radial-gradient(circle at 85% 18%, hsl(20 68% 33% / 0.16), transparent 24rem),
       linear-gradient(180deg, hsl(39 66% 96%), hsl(35 42% 86%));
+    line-height: 1.45;
   }
 
   h1, h2, h3, .font-display {
     font-family: Georgia, "Times New Roman", serif;
-    letter-spacing: -0.035em;
+    letter-spacing: -0.04em;
+  }
+
+  h1 { font-size: clamp(3.4rem, 8vw, 6.85rem); }
+  h2 { font-size: clamp(2.25rem, 4.7vw, 4.4rem); }
+  h3 { font-size: clamp(1.35rem, 2.7vw, 2.2rem); }
+
+  p, label, input, button, select, textarea, a, span, div {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: hsl(var(--somma-pink) / 0.25);
   }
 }
 
 @layer components {
+  .container {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
   .somma-nav {
     background: linear-gradient(90deg, hsl(27 48% 13% / 0.96), hsl(23 39% 10% / 0.94));
-    border-bottom: 1px solid hsl(37 58% 69% / 0.28);
+    border-bottom: 1px solid hsl(var(--somma-pink) / 0.24);
     color: hsl(40 70% 93%);
   }
 
   .somma-shell {
     background:
-      radial-gradient(circle at 18% 8%, hsl(42 91% 59% / 0.16), transparent 22rem),
-      radial-gradient(circle at 78% 18%, hsl(24 73% 42% / 0.16), transparent 24rem),
+      radial-gradient(circle at 18% 8%, hsl(var(--somma-pink) / 0.08), transparent 22rem),
+      radial-gradient(circle at 78% 18%, hsl(24 73% 42% / 0.14), transparent 24rem),
       linear-gradient(180deg, hsl(39 66% 96%), hsl(35 42% 86%));
   }
 
   .somma-panel {
     background: linear-gradient(145deg, hsl(42 69% 95%), hsl(35 43% 86%));
     border: 1px solid hsl(31 36% 50% / 0.3);
-    box-shadow: 0 24px 60px hsl(25 49% 18% / 0.14);
+    box-shadow: 0 20px 48px hsl(25 49% 18% / 0.12);
   }
 
   .somma-dark-panel {
     background:
-      radial-gradient(circle at 72% 50%, hsl(32 91% 49% / 0.18), transparent 18rem),
+      radial-gradient(circle at 72% 50%, hsl(var(--somma-pink) / 0.13), transparent 18rem),
+      radial-gradient(circle at 15% 14%, hsl(32 91% 49% / 0.16), transparent 14rem),
       linear-gradient(135deg, hsl(28 51% 15%), hsl(23 42% 9%));
-    border: 1px solid hsl(37 58% 69% / 0.25);
+    border: 1px solid hsl(var(--somma-pink) / 0.2);
     color: hsl(40 70% 93%);
-    box-shadow: 0 28px 80px hsl(25 49% 18% / 0.24);
+    box-shadow: 0 24px 68px hsl(25 49% 18% / 0.22);
   }
 
   .somma-grain {
@@ -105,10 +127,10 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.16;
+    opacity: 0.14;
     background-image:
-      radial-gradient(hsl(35 25% 16% / 0.22) 0.8px, transparent 0.8px),
-      radial-gradient(hsl(45 80% 80% / 0.18) 0.8px, transparent 0.8px);
+      radial-gradient(hsl(35 25% 16% / 0.2) 0.8px, transparent 0.8px),
+      radial-gradient(hsl(var(--somma-pink) / 0.14) 0.8px, transparent 0.8px);
     background-size: 18px 18px, 26px 26px;
     background-position: 0 0, 8px 10px;
     mix-blend-mode: multiply;
@@ -116,130 +138,104 @@
 
   .record-art {
     background:
-      radial-gradient(circle at center, hsl(28 78% 47%) 0 10%, hsl(22 42% 10%) 10.5% 17%, transparent 17.5%),
+      radial-gradient(circle at center, hsl(var(--somma-pink)) 0 7%, hsl(28 78% 47%) 7.5% 11%, hsl(22 42% 10%) 11.5% 17%, transparent 17.5%),
       repeating-radial-gradient(circle at center, hsl(24 38% 9%) 0 10px, hsl(26 34% 16%) 11px 13px, hsl(24 38% 9%) 14px 22px);
     box-shadow: inset 0 0 0 12px hsl(28 42% 8% / 0.8), 0 28px 70px hsl(24 59% 7% / 0.38);
+    animation: record-spin 24s linear infinite;
   }
 
   .retro-stripes {
-    background: linear-gradient(90deg, hsl(43 85% 62%), hsl(34 78% 49%), hsl(25 58% 36%), hsl(43 85% 62%));
+    background: linear-gradient(90deg, hsl(var(--somma-pink)), hsl(43 85% 62%), hsl(34 78% 49%), hsl(25 58% 36%));
+  }
+
+  .shadow-pink-glow {
+    box-shadow: var(--shadow-pink-glow);
+  }
+
+  .somma-card-hover {
+    transition: transform 260ms ease, box-shadow 260ms ease, border-color 260ms ease, background 260ms ease;
+  }
+
+  .somma-card-hover:hover {
+    transform: translateY(-5px) rotate(-0.25deg);
+    border-color: hsl(var(--somma-pink) / 0.35);
+    box-shadow: 0 22px 60px hsl(327 94% 51% / 0.14), 0 18px 48px hsl(25 49% 18% / 0.14);
+  }
+
+  .reveal-on-scroll {
+    animation: reveal-rise both;
+    animation-timeline: view();
+    animation-range: entry 8% cover 30%;
+  }
+
+  .artist-carousel {
+    position: relative;
+    overflow: hidden;
+    mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  }
+
+  .artist-carousel-track {
+    display: flex;
+    width: max-content;
+    gap: 0.75rem;
+    animation: artist-marquee 28s linear infinite;
+  }
+
+  .artist-carousel:hover .artist-carousel-track {
+    animation-play-state: paused;
+  }
+
+  .artist-pill {
+    white-space: nowrap;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--somma-pink) / 0.28);
+    background: hsl(40 66% 96% / 0.82);
+    color: hsl(25 39% 14%);
+    padding: 0.65rem 1.15rem;
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    box-shadow: 0 10px 22px hsl(25 49% 18% / 0.08);
+  }
+
+  .artist-pill:nth-child(3n) {
+    background: hsl(var(--somma-pink));
+    color: white;
+  }
+
+  .artist-pill:nth-child(4n) {
+    background: hsl(28 47% 24%);
+    color: hsl(40 70% 93%);
   }
 }
 
-/* Density pass: slightly smaller type and tighter rhythm so dashboards fit more content. */
-html {
-  font-size: 15px;
+@keyframes artist-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
-@media (min-width: 1024px) {
-  html {
-    font-size: 14.5px;
-  }
+@keyframes record-spin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); }
 }
 
-body {
-  line-height: 1.45;
-}
-
-.text-6xl {
-  font-size: clamp(2.65rem, 5vw, 3.65rem) !important;
-  line-height: 0.95 !important;
-}
-
-.text-5xl {
-  font-size: clamp(2.35rem, 4.2vw, 3.15rem) !important;
-  line-height: 0.98 !important;
-}
-
-.text-4xl {
-  font-size: clamp(1.8rem, 3vw, 2.25rem) !important;
-  line-height: 1.05 !important;
-}
-
-.text-3xl {
-  font-size: clamp(1.55rem, 2.3vw, 1.9rem) !important;
-}
-
-.text-2xl {
-  font-size: 1.35rem !important;
-}
-
-.text-xl {
-  font-size: 1.03rem !important;
-}
-
-.container {
-  padding-left: 1.35rem !important;
-  padding-right: 1.35rem !important;
-}
-
-@media (min-width: 768px) {
-  .container {
-    padding-left: 1.75rem !important;
-    padding-right: 1.75rem !important;
-  }
-}
-
-/* Motion pass: soft scroll reveals + playful hover lift. */
-@keyframes somma-scroll-rise {
+@keyframes reveal-rise {
   from {
-    opacity: 0.12;
-    transform: translateY(34px) scale(0.985);
-    filter: saturate(0.72) blur(2px);
+    opacity: 0;
+    transform: translateY(26px) scale(0.985);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: saturate(1) blur(0);
   }
 }
 
-@keyframes somma-record-roll {
-  from {
-    opacity: 0.4;
-    transform: translateY(28px) rotate(-10deg) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) rotate(0deg) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .somma-panel,
-  .somma-dark-panel,
-  .bg-gradient-card,
-  section,
-  footer {
-    transition:
-      transform 240ms ease,
-      box-shadow 240ms ease,
-      border-color 240ms ease,
-      background-color 240ms ease;
-  }
-
-  .somma-panel:hover,
-  .somma-dark-panel:hover,
-  .bg-gradient-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 24px 64px hsl(25 49% 18% / 0.18);
-  }
-
-  @supports (animation-timeline: view()) {
-    .somma-panel,
-    .somma-dark-panel,
-    .bg-gradient-card,
-    section,
-    footer {
-      animation: somma-scroll-rise both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 28%;
-    }
-
-    .record-art {
-      animation: somma-record-roll both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 42%;
-    }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }
