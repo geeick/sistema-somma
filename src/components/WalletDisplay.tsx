@@ -29,10 +29,7 @@ function formatMoney(value: number | string | null | undefined) {
 }
 
 export function WalletDisplay({ userId, refreshKey = 0 }: WalletDisplayProps) {
-  const [balance, setBalance] = useState({
-    total: 0,
-    available: 0,
-  });
+  const [balance, setBalance] = useState({ total: 0, available: 0 });
 
   useEffect(() => {
     if (!userId) return;
@@ -52,39 +49,39 @@ export function WalletDisplay({ userId, refreshKey = 0 }: WalletDisplayProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card className="somma-panel rounded-2xl">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Ganhos aprovados totais</CardTitle>
-          <TrendingUp className="h-4 w-4 text-primary" />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card className="somma-panel rounded-2xl min-h-[188px]">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+          <div>
+            <CardTitle className="text-[0.95rem] font-bold">Ganhos aprovados</CardTitle>
+            <p className="ui-caption mt-1">Total acumulado de envios aprovados ou pagos.</p>
+          </div>
+          <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <TrendingUp className="h-4 w-4" />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="font-display text-3xl font-black">R$ {formatMoney(balance.total)}</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Soma dos envios aprovados ou pagos.
-          </p>
+          <div className="metric-value text-[2.2rem]">R$ {formatMoney(balance.total)}</div>
         </CardContent>
       </Card>
 
-      <Card className="somma-dark-panel rounded-2xl">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-[#f7ead1]">Disponível para saque</CardTitle>
-          <Wallet className="h-4 w-4 text-primary" />
+      <Card className="somma-dark-panel rounded-2xl min-h-[188px]">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+          <div>
+            <CardTitle className="text-[0.95rem] font-bold text-[#f7ead1]">Disponível para saque</CardTitle>
+            <p className="text-[0.88rem] leading-relaxed text-[#f7ead1]/65 mt-1">Saques pendentes e pagos já foram descontados.</p>
+          </div>
+          <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+            <Wallet className="h-4 w-4" />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="font-display text-3xl font-black text-primary">
-            R$ {formatMoney(balance.available)}
-          </div>
-          <p className="text-xs text-[#f7ead1]/70 mt-1">
-            Saques pendentes e pagos já foram descontados.
-          </p>
-          <Button asChild className="mt-4 w-full rounded-full" disabled={balance.available < 25}>
-            <Link to="/wallet">Sacar / Ver carteira</Link>
+          <div className="metric-value text-[2.2rem] text-primary">R$ {formatMoney(balance.available)}</div>
+          <Button asChild className="mt-5 w-full rounded-xl font-bold" disabled={balance.available < 25}>
+            <Link to="/wallet">Ver carteira e sacar</Link>
           </Button>
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
