@@ -7,7 +7,7 @@ import { UploadVideo } from "@/components/UploadVideo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, DollarSign, ExternalLink, Instagram, Play, Target, Users, Youtube } from "lucide-react";
+import { Calendar, DollarSign, ExternalLink, Instagram, Play, Target, Users, Youtube, ArrowLeft, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface Campaign {
@@ -37,87 +37,55 @@ interface Page {
   verified?: boolean | null;
 }
 
-const platformIcons = {
-  instagram: Instagram,
-  tiktok: Play,
-  youtube_shorts: Youtube,
-};
+const platformIcons = { instagram: Instagram, tiktok: Play, youtube_shorts: Youtube };
 
 function normalizeStringList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string");
-  }
-
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((item): item is string => typeof item === "string");
-      }
+      if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string");
     } catch {
-      return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
     }
   }
-
   return [];
 }
 
 function normalizeRecord(value: unknown): Record<string, string> | null {
   if (!value) return null;
-
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, string>;
-      }
-    } catch {
-      return null;
-    }
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, string>;
+    } catch { return null; }
   }
-
-  if (typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, string>;
-  }
-
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, string>;
   return null;
 }
 
 function normalizeCampaign(data: any): Campaign {
-  return {
-    ...data,
-    required_tags: normalizeStringList(data.required_tags),
-    platforms: normalizeStringList(data.platforms),
-    audio_urls: normalizeRecord(data.audio_urls),
-    example_urls: normalizeRecord(data.example_urls),
-  } as Campaign;
+  return { ...data, required_tags: normalizeStringList(data.required_tags), platforms: normalizeStringList(data.platforms), audio_urls: normalizeRecord(data.audio_urls), example_urls: normalizeRecord(data.example_urls) } as Campaign;
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Not set";
+  if (!value) return "Não informado";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
+  if (Number.isNaN(date.getTime())) return "Não informado";
   return date.toLocaleDateString("pt-BR");
 }
 
 function formatMoney(value?: number | null) {
-  const amount = Number(value || 0);
-  return `R$ ${amount.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `R$ ${Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function platformLabel(platform: string) {
-  return platform.replace("_", " ");
+  const labels: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", youtube_shorts: "YouTube Shorts" };
+  return labels[platform] || platform.replace("_", " ");
 }
 
 function pageMatchesRequiredTags(page: Page, requiredTags: string[]) {
   if (requiredTags.length === 0) return true;
-
   const pageTags = normalizeStringList(page.tags).map((tag) => tag.toLowerCase());
   return requiredTags.some((tag) => pageTags.includes(tag.toLowerCase()));
 }
@@ -135,70 +103,41 @@ const CampaignDetail = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    getNeonSession()
-      .then(({ user }) => {
-        if (!user) {
-          navigate("/auth");
-          return;
-        }
-        setUser(user);
-      })
-      .catch(() => navigate("/auth"));
+    getNeonSession().then(({ user }) => {
+      if (!user) { navigate("/auth"); return; }
+      setUser(user);
+    }).catch(() => navigate("/auth"));
   }, [navigate]);
 
   useEffect(() => {
     if (!user || !id) return;
-
     const fetchData = async () => {
       setIsLoading(true);
-
       try {
         const [campaignData, pagesData] = await Promise.all([
           apiClient.tables.list("campaigns", { id, single: true }),
           apiClient.pages.list(),
         ]);
-
         if (!campaignData) {
-          toast({
-            title: "Campaign not found",
-            description: "This campaign could not be loaded.",
-            variant: "destructive",
-          });
+          toast({ title: "Campanha não encontrada", description: "Não foi possível carregar esta campanha.", variant: "destructive" });
           setCampaign(null);
           return;
         }
-
         setCampaign(normalizeCampaign(campaignData));
         setPages(Array.isArray(pagesData) ? pagesData : []);
       } catch (err: any) {
-        console.error("Error loading campaign detail:", err);
-        toast({
-          title: "Error",
-          description: err.message || "Failed to load campaign details",
-          variant: "destructive",
-        });
+        console.error("Erro ao carregar detalhes da campanha:", err);
+        toast({ title: "Erro", description: err.message || "Não foi possível carregar os detalhes da campanha.", variant: "destructive" });
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchData();
   }, [user, id]);
 
-  const requiredTags = useMemo(
-    () => normalizeStringList(campaign?.required_tags),
-    [campaign]
-  );
-
-  const platforms = useMemo(
-    () => normalizeStringList(campaign?.platforms),
-    [campaign]
-  );
-
-  const matchingPages = useMemo(() => {
-    return pages.filter((page) => page.verified === true && pageMatchesRequiredTags(page, requiredTags));
-  }, [pages, requiredTags]);
-
+  const requiredTags = useMemo(() => normalizeStringList(campaign?.required_tags), [campaign]);
+  const platforms = useMemo(() => normalizeStringList(campaign?.platforms), [campaign]);
+  const matchingPages = useMemo(() => pages.filter((page) => page.verified === true && pageMatchesRequiredTags(page, requiredTags)), [pages, requiredTags]);
   const isEnded = campaign?.end_date ? new Date(campaign.end_date) < new Date() : false;
   const isInactive = campaign?.status && campaign.status !== "active";
   const audioUrls = normalizeRecord(campaign?.audio_urls);
@@ -206,226 +145,134 @@ const CampaignDetail = () => {
 
   if (isLoading || !campaign) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen somma-shell">
         <Navbar />
-        <div className="container mx-auto px-4 pt-24 pb-12">
-          <p className="text-center text-muted-foreground">Loading campaign...</p>
+        <div className="container mx-auto px-4 pt-28 pb-12">
+          <p className="text-center text-muted-foreground font-semibold">Carregando campanha...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen somma-shell">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-12">
+      <div className="container mx-auto px-4 pt-28 pb-14">
         <div className="max-w-7xl mx-auto space-y-6">
-          <Button variant="ghost" onClick={() => navigate("/campaigns")}>← Back to Campaigns</Button>
+          <Button variant="ghost" className="rounded-xl font-bold" onClick={() => navigate("/campaigns")}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Voltar para campanhas
+          </Button>
 
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="bg-gradient-card border-border">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <CardTitle className="text-3xl">{campaign.title}</CardTitle>
-                        {campaign.code && (
-                          <Badge variant="secondary" className="font-mono">
-                            {campaign.code}
-                          </Badge>
-                        )}
-                        <Badge variant={campaign.status === "active" && !isEnded ? "default" : "secondary"}>
-                          {isEnded ? "ended" : campaign.status || "active"}
-                        </Badge>
-                      </div>
+          <section className="app-page-header">
+            <div className="app-eyebrow"><Sparkles className="h-4 w-4" /> Detalhes da campanha</div>
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 relative z-10">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  {campaign.code && <Badge variant="secondary" className="font-mono">{campaign.code}</Badge>}
+                  <Badge variant={campaign.status === "active" && !isEnded ? "default" : "secondary"}>{isEnded ? "Encerrada" : campaign.status === "active" ? "Ativa" : campaign.status || "Inativa"}</Badge>
+                </div>
+                <h1 className="app-title">{campaign.title}</h1>
+                <p className="app-subtitle">{campaign.client ? `Cliente: ${campaign.client}` : "Veja regras, plataformas aceitas e materiais da campanha."}</p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {platforms.map((platform) => {
+                  const Icon = platformIcons[platform as keyof typeof platformIcons];
+                  return Icon ? <div key={platform} className="h-10 w-10 rounded-xl bg-[#f7ead1]/10 text-[#f7ead1] flex items-center justify-center"><Icon className="h-5 w-5" /></div> : null;
+                })}
+              </div>
+            </div>
+          </section>
 
-                      {campaign.client && (
-                        <CardDescription className="text-base">
-                          Client: {campaign.client}
-                        </CardDescription>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      {platforms.map((platform) => {
-                        const PlatformIcon = platformIcons[platform as keyof typeof platformIcons];
-                        return PlatformIcon ? (
-                          <PlatformIcon key={platform} className="h-9 w-9 text-primary" />
-                        ) : null;
-                      })}
-                    </div>
-                  </div>
-                </CardHeader>
-
+          <div className="grid gap-7 lg:grid-cols-[1.55fr_0.85fr] items-start">
+            <div className="space-y-5 page-enter stagger-1">
+              <Card className="somma-panel rounded-2xl">
+                <CardHeader><CardTitle className="text-xl font-extrabold">Visão geral</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   {campaign.brief && (
                     <div>
-                      <h3 className="font-semibold mb-2">Brief</h3>
-                      <p className="text-muted-foreground whitespace-pre-wrap">{campaign.brief}</p>
+                      <h3 className="font-extrabold mb-2">Briefing</h3>
+                      <p className="text-[0.96rem] leading-relaxed text-muted-foreground whitespace-pre-wrap">{campaign.brief}</p>
                     </div>
                   )}
 
                   {(isEnded || isInactive) && (
-                    <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4">
-                      <p className="font-semibold text-destructive">
-                        This campaign is not accepting new submissions.
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Status: {campaign.status || "unknown"}. End date: {formatDate(campaign.end_date)}.
-                      </p>
+                    <div className="rounded-xl border border-destructive/20 bg-destructive/8 p-4">
+                      <p className="font-extrabold text-destructive">Esta campanha não está aceitando novos envios.</p>
+                      <p className="ui-caption mt-1">Status: {campaign.status || "não informado"}. Encerramento: {formatDate(campaign.end_date)}.</p>
                     </div>
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div className="rounded-lg border border-border bg-muted/20 p-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                        <Calendar className="h-4 w-4" />
-                        End Date
-                      </div>
-                      <p className="font-semibold">{formatDate(campaign.end_date)}</p>
-                    </div>
-
-                    <div className="rounded-lg border border-border bg-muted/20 p-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                        <Users className="h-4 w-4" />
-                        Max Posts
-                      </div>
-                      <p className="font-semibold">{campaign.max_posts_per_creator || 1} per creator</p>
-                    </div>
-
+                    <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><Calendar className="h-4 w-4" />Encerramento</div><p className="font-extrabold">{formatDate(campaign.end_date)}</p></div>
+                    <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><Users className="h-4 w-4" />Limite por criador</div><p className="font-extrabold">{campaign.max_posts_per_creator || 1} {campaign.max_posts_per_creator === 1 ? "post" : "posts"}</p></div>
                     {campaign.budget !== null && campaign.budget !== undefined && (
-                      <div className="rounded-lg border border-border bg-muted/20 p-4">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                          <DollarSign className="h-4 w-4" />
-                          Budget
-                        </div>
-                        <p className="font-semibold text-primary">{formatMoney(campaign.budget)}</p>
-                      </div>
+                      <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><DollarSign className="h-4 w-4" />Orçamento</div><p className="font-extrabold text-primary">{formatMoney(campaign.budget)}</p></div>
                     )}
                   </div>
 
                   <div className="grid gap-6 md:grid-cols-2">
                     <div>
-                      <h3 className="font-semibold mb-2 flex items-center gap-2">
-                        <Target className="h-4 w-4 text-primary" />
-                        Required Tags
-                      </h3>
-                      {requiredTags.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No required tags. Any approved page can submit.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {requiredTags.map((tag) => (
-                            <Badge key={tag} variant="secondary">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                      <h3 className="font-extrabold mb-2 flex items-center gap-2"><Target className="h-4 w-4 text-primary" />Tags obrigatórias</h3>
+                      {requiredTags.length === 0 ? <p className="ui-caption">Não há tags obrigatórias. Qualquer página aprovada pode participar.</p> : <div className="flex flex-wrap gap-2">{requiredTags.map((tag) => <Badge key={tag} variant="secondary" className="rounded-full">{tag}</Badge>)}</div>}
                     </div>
-
                     <div>
-                      <h3 className="font-semibold mb-2">Accepted Platforms</h3>
-                      {platforms.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">All platforms accepted.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {platforms.map((platform) => (
-                            <Badge key={platform} variant="outline" className="capitalize">
-                              {platformLabel(platform)}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                      <h3 className="font-extrabold mb-2">Plataformas aceitas</h3>
+                      {platforms.length === 0 ? <p className="ui-caption">Todas as plataformas são aceitas.</p> : <div className="flex flex-wrap gap-2">{platforms.map((platform) => <Badge key={platform} variant="outline" className="rounded-full">{platformLabel(platform)}</Badge>)}</div>}
                     </div>
                   </div>
 
                   {hasAnyUrl(audioUrls) && (
                     <div>
-                      <h3 className="font-semibold mb-3">Campaign Audio</h3>
+                      <h3 className="font-extrabold mb-3">Áudio da campanha</h3>
                       <div className="flex flex-wrap gap-3">
-                        {Object.entries(audioUrls || {}).map(([label, url]) => {
-                          if (!String(url || "").trim()) return null;
-                          return (
-                            <a
-                              key={label}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 transition-colors hover:bg-accent"
-                            >
-                              <Play className="h-4 w-4 text-primary" />
-                              <span className="font-medium capitalize">{platformLabel(label)}</span>
-                              <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                            </a>
-                          );
-                        })}
+                        {Object.entries(audioUrls || {}).map(([label, url]) => String(url || "").trim() ? (
+                          <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 font-bold hover:bg-accent/30 transition-colors">
+                            <Play className="h-4 w-4 text-primary" />{platformLabel(label)}<ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                          </a>
+                        ) : null)}
                       </div>
                     </div>
                   )}
 
                   {hasAnyUrl(exampleUrls) && (
                     <div>
-                      <h3 className="font-semibold mb-3">Examples</h3>
+                      <h3 className="font-extrabold mb-3">Exemplos</h3>
                       <div className="flex flex-wrap gap-3">
-                        {Object.entries(exampleUrls || {}).map(([label, url], index) => {
-                          if (!String(url || "").trim()) return null;
-                          return (
-                            <a
-                              key={label}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 transition-colors hover:bg-accent"
-                            >
-                              <span className="font-medium">Example {index + 1}</span>
-                              <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                            </a>
-                          );
-                        })}
+                        {Object.entries(exampleUrls || {}).map(([label, url], index) => String(url || "").trim() ? (
+                          <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 font-bold hover:bg-accent/30 transition-colors">Exemplo {index + 1}<ExternalLink className="h-3.5 w-3.5 text-muted-foreground" /></a>
+                        ) : null)}
                       </div>
                     </div>
                   )}
 
                   {campaign.rules && (
                     <div>
-                      <h3 className="font-semibold mb-2">Campaign Rules</h3>
-                      <pre className="whitespace-pre-wrap rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
-                        {typeof campaign.rules === "string"
-                          ? campaign.rules
-                          : JSON.stringify(campaign.rules, null, 2)}
-                      </pre>
+                      <h3 className="font-extrabold mb-2">Regras da campanha</h3>
+                      <pre className="whitespace-pre-wrap rounded-xl border border-border bg-background/55 p-4 text-[0.9rem] leading-relaxed text-muted-foreground font-sans">{typeof campaign.rules === "string" ? campaign.rules : JSON.stringify(campaign.rules, null, 2)}</pre>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
-            <div className="lg:col-span-1 space-y-4">
+            <div className="space-y-4 page-enter stagger-2">
               {requiredTags.length > 0 && matchingPages.length === 0 && (
-                <Card className="bg-gradient-card border-border">
-                  <CardContent className="pt-6 text-center space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      You do not have an approved page with one of this campaign's required tags yet.
-                    </p>
-                    <Button onClick={() => navigate("/pages")}>Update your pages</Button>
+                <Card className="somma-panel rounded-2xl">
+                  <CardContent className="p-5 text-center space-y-3">
+                    <p className="ui-caption">Você ainda não tem uma página aprovada com uma das tags obrigatórias desta campanha.</p>
+                    <Button className="rounded-xl" onClick={() => navigate("/pages")}>Atualizar minhas páginas</Button>
                   </CardContent>
                 </Card>
               )}
 
               {isEnded || isInactive ? (
-                <Card className="bg-gradient-card border-border">
-                  <CardContent className="pt-6 text-center text-muted-foreground">
-                    This campaign is closed, so the submit form is hidden.
-                  </CardContent>
-                </Card>
+                <div className="empty-state min-h-[220px]">
+                  <Target className="h-8 w-8 text-primary" />
+                  <h3 className="font-extrabold text-lg">Campanha encerrada</h3>
+                  <p className="ui-caption">O formulário de envio fica oculto quando a campanha não aceita mais novos conteúdos.</p>
+                </div>
               ) : (
-                <UploadVideo
-                  userId={user?.id}
-                  fixedCampaignId={campaign.id}
-                  fixedCampaign={campaign}
-                  showCampaignDetailsLink={false}
-                />
+                <UploadVideo userId={user?.id} fixedCampaignId={campaign.id} fixedCampaign={campaign} showCampaignDetailsLink={false} />
               )}
             </div>
           </div>
@@ -436,4 +283,3 @@ const CampaignDetail = () => {
 };
 
 export default CampaignDetail;
-
