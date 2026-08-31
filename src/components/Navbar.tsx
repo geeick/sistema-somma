@@ -6,6 +6,13 @@ import { useEffect, useState } from "react";
 import sommaLogo from "@/assets/somma-logo.png";
 import { useUserRole } from "@/hooks/useUserRole";
 
+const publicNavLinks = [
+  { label: "Descobrir", href: "/#descobrir" },
+  { label: "Como funciona", href: "/#como-funciona" },
+  { label: "Criadores", href: "/#criadores" },
+  { label: "Sobre", href: "/#sobre" },
+];
+
 export const Navbar = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<NeonUser | null>(null);
@@ -32,10 +39,11 @@ export const Navbar = () => {
         <div className="hidden md:flex items-center gap-2 text-sm text-secondary-foreground/80">
           {!user && (
             <>
-              <a href="#descobrir" className="px-3 py-2 hover:text-primary transition-colors">Descobrir</a>
-              <a href="#criadores" className="px-3 py-2 hover:text-primary transition-colors">Criadores</a>
-              <a href="#como-funciona" className="px-3 py-2 hover:text-primary transition-colors">Como funciona</a>
-              <a href="#sobre" className="px-3 py-2 hover:text-primary transition-colors">Sobre</a>
+              {publicNavLinks.map((link) => (
+                <a key={link.href} href={link.href} className="px-3 py-2 hover:text-primary transition-colors">
+                  {link.label}
+                </a>
+              ))}
             </>
           )}
         </div>
@@ -69,7 +77,7 @@ export const Navbar = () => {
                 !isLoading && (
                   <>
                     <Button variant="ghost" asChild className="text-secondary-foreground hover:text-primary hover:bg-primary/10">
-                      <Link to="/">Início</Link>
+                      <Link to="/dashboard">Início</Link>
                     </Button>
 
                     <Button variant="ghost" asChild className="text-secondary-foreground hover:text-primary hover:bg-primary/10">
