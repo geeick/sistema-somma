@@ -49,7 +49,7 @@ export const StatsCards = ({ userId, refreshKey = 0 }: StatsCardsProps) => {
         setProfile(profileData || null);
         setSubmissions(submissionsData || []);
       } catch (err) {
-        console.error("Failed to load dashboard stats:", err);
+        console.error("Falha ao carregar estatísticas do painel:", err);
       }
     };
 
@@ -66,35 +66,35 @@ export const StatsCards = ({ userId, refreshKey = 0 }: StatsCardsProps) => {
 
   const statCards = [
     {
-      title: "Total Earnings",
+      title: "Ganhos totais",
       value: `R$ ${formatMoney(totalEarnings)}`,
       icon: DollarSign,
-      color: "text-green-500",
+      color: "text-green-700",
     },
     {
-      title: "Available Now",
+      title: "Disponível agora",
       value: `R$ ${formatMoney(available)}`,
       icon: Wallet,
-      color: "text-green-500",
+      color: "text-green-700",
     },
     {
-      title: "Total Videos",
+      title: "Vídeos enviados",
       value: activeSubmissions.length.toString(),
       icon: Video,
       color: "text-primary",
     },
     {
-      title: "Pending Withdrawals",
+      title: "Saques pendentes",
       value: `R$ ${formatMoney(pendingWithdrawals)}`,
       icon: Clock,
-      color: "text-yellow-500",
+      color: "text-yellow-700",
     },
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
       {statCards.map((stat) => (
-        <Card key={stat.title} className="bg-gradient-card border-border">
+        <Card key={stat.title} className="somma-panel rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {stat.title}
@@ -102,7 +102,7 @@ export const StatsCards = ({ userId, refreshKey = 0 }: StatsCardsProps) => {
             <stat.icon className={`h-4 w-4 ${stat.color}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stat.value}</div>
+            <div className="font-display text-3xl font-black">{stat.value}</div>
           </CardContent>
         </Card>
       ))}
