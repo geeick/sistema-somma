@@ -5,14 +5,10 @@ import './index.css';
 import App from './App';
 import LocalAuthProvider from './lib/LocalAuthProvider';
 import { installPortugueseTextReplacements } from './lib/portugueseText';
-
-// The Neon JS SDK may export UI components in a separate package or path.
-// The quickstart sometimes references `@neondatabase/neon-js/ui` which
-// may not be available for your installed SDK version. To avoid a hard
-// dependency on the UI package, render the app directly. If you later
-// install a provider component, wrap `<App/>` with it.
+import { installExtraPortugueseTranslations } from './lib/portugueseTextExtra';
 
 installPortugueseTextReplacements();
+installExtraPortugueseTranslations();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
