@@ -65,44 +65,26 @@ export const StatsCards = ({ userId, refreshKey = 0 }: StatsCardsProps) => {
   const pendingWithdrawals = profile?.pending_withdrawals ?? 0;
 
   const statCards = [
-    {
-      title: "Ganhos totais",
-      value: `R$ ${formatMoney(totalEarnings)}`,
-      icon: DollarSign,
-      color: "text-green-700",
-    },
-    {
-      title: "Disponível agora",
-      value: `R$ ${formatMoney(available)}`,
-      icon: Wallet,
-      color: "text-green-700",
-    },
-    {
-      title: "Vídeos enviados",
-      value: activeSubmissions.length.toString(),
-      icon: Video,
-      color: "text-primary",
-    },
-    {
-      title: "Saques pendentes",
-      value: `R$ ${formatMoney(pendingWithdrawals)}`,
-      icon: Clock,
-      color: "text-yellow-700",
-    },
+    { title: "Ganhos totais", value: `R$ ${formatMoney(totalEarnings)}`, icon: DollarSign, iconClass: "text-emerald-700 bg-emerald-50" },
+    { title: "Disponível agora", value: `R$ ${formatMoney(available)}`, icon: Wallet, iconClass: "text-emerald-700 bg-emerald-50" },
+    { title: "Vídeos enviados", value: activeSubmissions.length.toString(), icon: Video, iconClass: "text-primary bg-primary/10" },
+    { title: "Saques pendentes", value: `R$ ${formatMoney(pendingWithdrawals)}`, icon: Clock, iconClass: "text-amber-700 bg-amber-50" },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       {statCards.map((stat) => (
-        <Card key={stat.title} className="somma-panel rounded-2xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+        <Card key={stat.title} className="somma-panel rounded-2xl min-h-[138px]">
+          <CardHeader className="flex flex-row items-start justify-between pb-3">
+            <CardTitle className="text-[0.92rem] font-bold text-muted-foreground tracking-[-0.015em]">
               {stat.title}
             </CardTitle>
-            <stat.icon className={`h-4 w-4 ${stat.color}`} />
+            <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${stat.iconClass}`}>
+              <stat.icon className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="font-display text-3xl font-black">{stat.value}</div>
+            <div className="metric-value text-[2rem] md:text-[2.15rem]">{stat.value}</div>
           </CardContent>
         </Card>
       ))}
