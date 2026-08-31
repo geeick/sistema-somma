@@ -1,8 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,750;9..144,850&family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Somma retro music system: warm paper, vinyl browns, golden movement accents. */
+/* Somma retro music system: warm paper, vinyl browns, golden movement accents, and restrained Somma pink. */
 
 @layer base {
   :root {
@@ -40,7 +42,7 @@
     --gradient-primary: linear-gradient(135deg, hsl(42 91% 59%), hsl(29 86% 47%), hsl(327 94% 51%));
     --gradient-card: linear-gradient(145deg, hsl(40 66% 96%), hsl(34 44% 86%));
     --shadow-glow: 0 18px 56px hsl(27 73% 31% / 0.22);
-    --shadow-pink-glow: 0 16px 50px hsl(327 94% 51% / 0.32);
+    --shadow-pink-glow: 0 16px 50px hsl(327 94% 51% / 0.24);
   }
 }
 
@@ -56,29 +58,30 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background-image:
-      radial-gradient(circle at 20% 10%, hsl(327 94% 51% / 0.09), transparent 24rem),
-      radial-gradient(circle at 85% 18%, hsl(20 68% 33% / 0.16), transparent 24rem),
+      radial-gradient(circle at 20% 10%, hsl(327 94% 51% / 0.07), transparent 24rem),
+      radial-gradient(circle at 85% 18%, hsl(20 68% 33% / 0.14), transparent 24rem),
       linear-gradient(180deg, hsl(39 66% 96%), hsl(35 42% 86%));
     line-height: 1.45;
   }
 
   h1, h2, h3, .font-display {
-    font-family: Georgia, "Times New Roman", serif;
-    letter-spacing: -0.04em;
+    font-family: "Fraunces", Georgia, "Times New Roman", serif;
+    letter-spacing: -0.045em;
+  }
+
+  .font-ui {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.015em;
   }
 
   h1 { font-size: clamp(3.4rem, 8vw, 6.85rem); }
   h2 { font-size: clamp(2.25rem, 4.7vw, 4.4rem); }
   h3 { font-size: clamp(1.35rem, 2.7vw, 2.2rem); }
 
-  p, label, input, button, select, textarea, a, span, div {
-    text-wrap: pretty;
-  }
-
   ::selection {
-    background: hsl(var(--somma-pink) / 0.25);
+    background: hsl(var(--somma-pink) / 0.22);
   }
 }
 
@@ -89,30 +92,30 @@
   }
 
   .somma-nav {
-    background: linear-gradient(90deg, hsl(27 48% 13% / 0.96), hsl(23 39% 10% / 0.94));
-    border-bottom: 1px solid hsl(var(--somma-pink) / 0.24);
+    background: linear-gradient(90deg, hsl(27 48% 13% / 0.97), hsl(23 39% 10% / 0.95));
+    border-bottom: 1px solid hsl(var(--somma-pink) / 0.18);
     color: hsl(40 70% 93%);
   }
 
   .somma-shell {
     background:
-      radial-gradient(circle at 18% 8%, hsl(var(--somma-pink) / 0.08), transparent 22rem),
-      radial-gradient(circle at 78% 18%, hsl(24 73% 42% / 0.14), transparent 24rem),
+      radial-gradient(circle at 18% 8%, hsl(var(--somma-pink) / 0.06), transparent 22rem),
+      radial-gradient(circle at 78% 18%, hsl(24 73% 42% / 0.12), transparent 24rem),
       linear-gradient(180deg, hsl(39 66% 96%), hsl(35 42% 86%));
   }
 
   .somma-panel {
     background: linear-gradient(145deg, hsl(42 69% 95%), hsl(35 43% 86%));
-    border: 1px solid hsl(31 36% 50% / 0.3);
-    box-shadow: 0 20px 48px hsl(25 49% 18% / 0.12);
+    border: 1px solid hsl(31 36% 50% / 0.26);
+    box-shadow: 0 20px 48px hsl(25 49% 18% / 0.11);
   }
 
   .somma-dark-panel {
     background:
-      radial-gradient(circle at 72% 50%, hsl(var(--somma-pink) / 0.13), transparent 18rem),
-      radial-gradient(circle at 15% 14%, hsl(32 91% 49% / 0.16), transparent 14rem),
+      radial-gradient(circle at 76% 50%, hsl(var(--somma-pink) / 0.08), transparent 17rem),
+      radial-gradient(circle at 15% 14%, hsl(32 91% 49% / 0.13), transparent 14rem),
       linear-gradient(135deg, hsl(28 51% 15%), hsl(23 42% 9%));
-    border: 1px solid hsl(var(--somma-pink) / 0.2);
+    border: 1px solid hsl(36 50% 72% / 0.18);
     color: hsl(40 70% 93%);
     box-shadow: 0 24px 68px hsl(25 49% 18% / 0.22);
   }
@@ -127,10 +130,10 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.14;
+    opacity: 0.12;
     background-image:
-      radial-gradient(hsl(35 25% 16% / 0.2) 0.8px, transparent 0.8px),
-      radial-gradient(hsl(var(--somma-pink) / 0.14) 0.8px, transparent 0.8px);
+      radial-gradient(hsl(35 25% 16% / 0.18) 0.8px, transparent 0.8px),
+      radial-gradient(hsl(var(--somma-pink) / 0.1) 0.8px, transparent 0.8px);
     background-size: 18px 18px, 26px 26px;
     background-position: 0 0, 8px 10px;
     mix-blend-mode: multiply;
@@ -138,10 +141,11 @@
 
   .record-art {
     background:
-      radial-gradient(circle at center, hsl(var(--somma-pink)) 0 7%, hsl(28 78% 47%) 7.5% 11%, hsl(22 42% 10%) 11.5% 17%, transparent 17.5%),
+      radial-gradient(circle at center, hsl(24 38% 9%) 0 7%, hsl(28 78% 47%) 7.5% 11%, hsl(22 42% 10%) 11.5% 17%, transparent 17.5%),
       repeating-radial-gradient(circle at center, hsl(24 38% 9%) 0 10px, hsl(26 34% 16%) 11px 13px, hsl(24 38% 9%) 14px 22px);
     box-shadow: inset 0 0 0 12px hsl(28 42% 8% / 0.8), 0 28px 70px hsl(24 59% 7% / 0.38);
-    animation: record-spin 24s linear infinite;
+    transform-origin: center;
+    animation: record-spin 28s linear infinite;
   }
 
   .retro-stripes {
@@ -157,9 +161,9 @@
   }
 
   .somma-card-hover:hover {
-    transform: translateY(-5px) rotate(-0.25deg);
-    border-color: hsl(var(--somma-pink) / 0.35);
-    box-shadow: 0 22px 60px hsl(327 94% 51% / 0.14), 0 18px 48px hsl(25 49% 18% / 0.14);
+    transform: translateY(-5px) rotate(-0.18deg);
+    border-color: hsl(var(--somma-pink) / 0.22);
+    box-shadow: 0 22px 60px hsl(327 94% 51% / 0.09), 0 18px 48px hsl(25 49% 18% / 0.14);
   }
 
   .reveal-on-scroll {
@@ -178,7 +182,7 @@
     display: flex;
     width: max-content;
     gap: 0.75rem;
-    animation: artist-marquee 28s linear infinite;
+    animation: artist-marquee 30s linear infinite;
   }
 
   .artist-carousel:hover .artist-carousel-track {
@@ -188,24 +192,34 @@
   .artist-pill {
     white-space: nowrap;
     border-radius: 999px;
-    border: 1px solid hsl(var(--somma-pink) / 0.28);
-    background: hsl(40 66% 96% / 0.82);
+    border: 1px solid hsl(31 36% 50% / 0.24);
+    background: hsl(40 66% 96% / 0.95);
     color: hsl(25 39% 14%);
-    padding: 0.65rem 1.15rem;
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 900;
+    padding: 0.6rem 1.08rem;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.88rem;
+    font-weight: 800;
     letter-spacing: -0.02em;
-    box-shadow: 0 10px 22px hsl(25 49% 18% / 0.08);
+    box-shadow: 0 10px 22px hsl(25 49% 18% / 0.07);
+    transition: transform 220ms ease, border-color 220ms ease, color 220ms ease, background 220ms ease;
   }
 
-  .artist-pill:nth-child(3n) {
+  .artist-pill::before {
+    content: "";
+    display: inline-block;
+    width: 0.42rem;
+    height: 0.42rem;
+    margin-right: 0.48rem;
+    border-radius: 999px;
     background: hsl(var(--somma-pink));
-    color: white;
+    vertical-align: 0.08rem;
   }
 
-  .artist-pill:nth-child(4n) {
-    background: hsl(28 47% 24%);
-    color: hsl(40 70% 93%);
+  .artist-pill:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--somma-pink) / 0.45);
+    background: hsl(39 70% 98%);
+    color: hsl(var(--somma-pink));
   }
 }
 
@@ -215,8 +229,8 @@
 }
 
 @keyframes record-spin {
-  from { transform: translateY(-50%) rotate(0deg); }
-  to { transform: translateY(-50%) rotate(360deg); }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @keyframes reveal-rise {
