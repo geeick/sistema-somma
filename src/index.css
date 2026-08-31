@@ -125,3 +125,121 @@
     background: linear-gradient(90deg, hsl(43 85% 62%), hsl(34 78% 49%), hsl(25 58% 36%), hsl(43 85% 62%));
   }
 }
+
+/* Density pass: slightly smaller type and tighter rhythm so dashboards fit more content. */
+html {
+  font-size: 15px;
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 14.5px;
+  }
+}
+
+body {
+  line-height: 1.45;
+}
+
+.text-6xl {
+  font-size: clamp(2.65rem, 5vw, 3.65rem) !important;
+  line-height: 0.95 !important;
+}
+
+.text-5xl {
+  font-size: clamp(2.35rem, 4.2vw, 3.15rem) !important;
+  line-height: 0.98 !important;
+}
+
+.text-4xl {
+  font-size: clamp(1.8rem, 3vw, 2.25rem) !important;
+  line-height: 1.05 !important;
+}
+
+.text-3xl {
+  font-size: clamp(1.55rem, 2.3vw, 1.9rem) !important;
+}
+
+.text-2xl {
+  font-size: 1.35rem !important;
+}
+
+.text-xl {
+  font-size: 1.03rem !important;
+}
+
+.container {
+  padding-left: 1.35rem !important;
+  padding-right: 1.35rem !important;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding-left: 1.75rem !important;
+    padding-right: 1.75rem !important;
+  }
+}
+
+/* Motion pass: soft scroll reveals + playful hover lift. */
+@keyframes somma-scroll-rise {
+  from {
+    opacity: 0.12;
+    transform: translateY(34px) scale(0.985);
+    filter: saturate(0.72) blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: saturate(1) blur(0);
+  }
+}
+
+@keyframes somma-record-roll {
+  from {
+    opacity: 0.4;
+    transform: translateY(28px) rotate(-10deg) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .somma-panel,
+  .somma-dark-panel,
+  .bg-gradient-card,
+  section,
+  footer {
+    transition:
+      transform 240ms ease,
+      box-shadow 240ms ease,
+      border-color 240ms ease,
+      background-color 240ms ease;
+  }
+
+  .somma-panel:hover,
+  .somma-dark-panel:hover,
+  .bg-gradient-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 24px 64px hsl(25 49% 18% / 0.18);
+  }
+
+  @supports (animation-timeline: view()) {
+    .somma-panel,
+    .somma-dark-panel,
+    .bg-gradient-card,
+    section,
+    footer {
+      animation: somma-scroll-rise both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 28%;
+    }
+
+    .record-art {
+      animation: somma-record-roll both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 42%;
+    }
+  }
+}
