@@ -1,39 +1,39 @@
 /* Product-side polish. The public landing page keeps its more editorial Fraunces treatment. */
 
-.somma-shell:has(nav a[href="/wallet"]) {
+body:has(nav a[href="/wallet"]) {
   --app-card: rgba(255, 250, 242, 0.84);
   --app-border: rgba(112, 70, 42, 0.18);
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .font-display {
+body:has(nav a[href="/wallet"]) .font-display {
   font-family: "Manrope", ui-sans-serif, system-ui, sans-serif !important;
   letter-spacing: -0.035em !important;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .text-xs {
+body:has(nav a[href="/wallet"]) .text-xs {
   font-size: 0.84rem !important;
   line-height: 1.55 !important;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .text-sm {
+body:has(nav a[href="/wallet"]) .text-sm {
   font-size: 0.94rem !important;
   line-height: 1.58 !important;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) [class*="text-muted-foreground"] {
+body:has(nav a[href="/wallet"]) [class*="text-muted-foreground"] {
   color: hsl(25 18% 38%);
 }
 
-.somma-shell:has(nav a[href="/wallet"]) input,
-.somma-shell:has(nav a[href="/wallet"]) textarea,
-.somma-shell:has(nav a[href="/wallet"]) button,
-.somma-shell:has(nav a[href="/wallet"]) [role="combobox"] {
+body:has(nav a[href="/wallet"]) input,
+body:has(nav a[href="/wallet"]) textarea,
+body:has(nav a[href="/wallet"]) button,
+body:has(nav a[href="/wallet"]) [role="combobox"] {
   min-height: 2.7rem;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) input,
-.somma-shell:has(nav a[href="/wallet"]) textarea,
-.somma-shell:has(nav a[href="/wallet"]) [role="combobox"] {
+body:has(nav a[href="/wallet"]) input,
+body:has(nav a[href="/wallet"]) textarea,
+body:has(nav a[href="/wallet"]) [role="combobox"] {
   border-radius: 0.85rem;
   border-color: rgba(112, 70, 42, 0.2);
   background: rgba(255, 252, 247, 0.76);
@@ -41,29 +41,29 @@
   transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) input:focus,
-.somma-shell:has(nav a[href="/wallet"]) textarea:focus,
-.somma-shell:has(nav a[href="/wallet"]) [role="combobox"]:focus-within {
+body:has(nav a[href="/wallet"]) input:focus,
+body:has(nav a[href="/wallet"]) textarea:focus,
+body:has(nav a[href="/wallet"]) [role="combobox"]:focus-within {
   border-color: hsl(var(--primary) / 0.65);
   box-shadow: 0 0 0 4px hsl(var(--primary) / 0.09);
   background: rgba(255, 253, 249, 0.96);
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .somma-panel,
-.somma-shell:has(nav a[href="/wallet"]) .bg-gradient-card {
+body:has(nav a[href="/wallet"]) .somma-panel,
+body:has(nav a[href="/wallet"]) .bg-gradient-card {
   background: linear-gradient(145deg, rgba(255, 252, 247, 0.95), rgba(246, 236, 222, 0.9));
   border-color: var(--app-border);
   box-shadow: 0 14px 40px rgba(67, 39, 22, 0.075);
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .somma-panel:hover,
-.somma-shell:has(nav a[href="/wallet"]) .bg-gradient-card:hover {
+body:has(nav a[href="/wallet"]) .somma-panel:hover,
+body:has(nav a[href="/wallet"]) .bg-gradient-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 22px 54px rgba(67, 39, 22, 0.1);
 }
 
 /* Pages screen: turn the sparse utility header into a deliberate product header. */
-.somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
+body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
   position: relative;
   overflow: hidden;
   padding: 1.85rem 2rem;
@@ -77,7 +77,7 @@
   animation: somma-app-enter 500ms cubic-bezier(.2,.75,.25,1) both;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child h1 {
+body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child h1 {
   color: #f9edd9;
   font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(2rem, 3vw, 3rem);
@@ -87,20 +87,20 @@
   margin-bottom: 0.55rem;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child p {
+body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child p {
   color: rgba(249, 237, 217, 0.74) !important;
   font-size: 0.98rem;
   line-height: 1.6;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child button {
+body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child button {
   border-radius: 0.85rem;
   font-weight: 800;
   box-shadow: 0 10px 28px hsl(var(--primary) / 0.2);
 }
 
 /* Empty states should feel intentional instead of like unfinished blank cards. */
-.somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > [class*="bg-gradient-card"] {
+body:has(nav a[href="/wallet"]) .max-w-4xl > [class*="bg-gradient-card"] {
   min-height: 12rem;
   display: flex;
   align-items: center;
@@ -112,14 +112,14 @@
 }
 
 /* Cards enter with a subtle stagger-like rise when screens mount. */
-.somma-shell:has(nav a[href="/wallet"]) .somma-panel,
-.somma-shell:has(nav a[href="/wallet"]) .bg-gradient-card {
+body:has(nav a[href="/wallet"]) .somma-panel,
+body:has(nav a[href="/wallet"]) .bg-gradient-card {
   animation: somma-card-enter 430ms cubic-bezier(.2,.75,.25,1) both;
 }
 
-.somma-shell:has(nav a[href="/wallet"]) .grid > :nth-child(2) { animation-delay: 45ms; }
-.somma-shell:has(nav a[href="/wallet"]) .grid > :nth-child(3) { animation-delay: 90ms; }
-.somma-shell:has(nav a[href="/wallet"]) .grid > :nth-child(4) { animation-delay: 135ms; }
+body:has(nav a[href="/wallet"]) .grid > :nth-child(2) { animation-delay: 45ms; }
+body:has(nav a[href="/wallet"]) .grid > :nth-child(3) { animation-delay: 90ms; }
+body:has(nav a[href="/wallet"]) .grid > :nth-child(4) { animation-delay: 135ms; }
 
 @keyframes somma-app-enter {
   from { opacity: 0; transform: translateY(10px); }
@@ -132,7 +132,7 @@
 }
 
 @media (max-width: 720px) {
-  .somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
+  body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
     align-items: flex-start;
     gap: 1rem;
     padding: 1.5rem;
@@ -140,9 +140,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .somma-shell:has(nav a[href="/wallet"]) .somma-panel,
-  .somma-shell:has(nav a[href="/wallet"]) .bg-gradient-card,
-  .somma-shell:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
+  body:has(nav a[href="/wallet"]) .somma-panel,
+  body:has(nav a[href="/wallet"]) .bg-gradient-card,
+  body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
     animation: none !important;
   }
 }
