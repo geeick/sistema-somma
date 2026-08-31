@@ -26,6 +26,7 @@ const EXTRA_TRANSLATIONS: Record<string, string> = {
   "View profile": "Ver perfil",
   "followers": "seguidores",
   "Loading pages...": "Carregando páginas...",
+  "Select at least one tag.": "Selecione pelo menos uma tag.",
   "Instagram connected": "Instagram conectado",
   "Your Instagram page was verified and added.": "Sua página do Instagram foi verificada e adicionada.",
   "Instagram connection failed": "Falha ao conectar o Instagram",
@@ -75,7 +76,11 @@ const EXTRA_TRANSLATIONS: Record<string, string> = {
   "Saved key on file:": "Chave salva:",
   "Type a full key to update it.": "Digite uma chave completa para atualizá-la.",
   "Your Pages": "Suas páginas",
-  "Add Page": "Adicionar página"
+  "Add Page": "Adicionar página",
+  "Connect Instagram": "Conectar Instagram",
+  "Connect TikTok": "Conectar TikTok",
+  "Edit": "Editar",
+  "Delete": "Excluir"
 };
 
 function shouldSkip(el: Element | null) {
