@@ -17,16 +17,17 @@ interface UploadVideoProps {
   fixedCampaignId?: string;
   fixedCampaign?: Partial<Campaign> | null;
   showCampaignDetailsLink?: boolean;
+  onSubmissionCreated?: () => void;
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 const submissionSchema = z.object({
-  campaignId: z.string().uuid("Please select a campaign"),
-  pageId: z.string().min(1, "Please select one of your approved pages"),
-  postUrl: z.string().trim().url("Invalid post URL").max(500, "URL must be less than 500 characters"),
+  campaignId: z.string().uuid("Selecione uma campanha"),
+  pageId: z.string().min(1, "Selecione uma das suas páginas aprovadas"),
+  postUrl: z.string().trim().url("URL do post inválida").max(500, "A URL precisa ter menos de 500 caracteres"),
   platform: z.enum(["instagram", "tiktok", "youtube_shorts"]),
-  audioUrl: z.string().trim().url("Invalid audio URL").optional().or(z.literal("")),
+  audioUrl: z.string().trim().url("URL do áudio inválida").optional().or(z.literal("")),
   tiktokVideoId: z.string().optional(),
 });
 
@@ -85,8 +86,14 @@ function normalizeList(value: unknown): string[] {
 }
 
 function normalizePlatform(platform?: string | null) {
-  if (!platform) return "platform";
-  return platform.replace("_", " ");
+  const labels: Record<string, string> = {
+    instagram: "Instagram",
+    tiktok: "TikTok",
+    youtube_shorts: "YouTube Shorts",
+  };
+
+  if (!platform) return "plataforma";
+  return labels[platform] || platform.replace("_", " ");
 }
 
 function formatCount(value: number | null | undefined) {
@@ -99,7 +106,7 @@ function getVideoLabel(video: TikTokVideo) {
     video.title ||
     video.video_description ||
     video.share_url ||
-    `TikTok video ${video.id}`
+    `Vídeo do TikTok ${video.id}`
   );
 }
 
@@ -115,6 +122,7 @@ export const UploadVideo = ({
   fixedCampaignId,
   fixedCampaign,
   showCampaignDetailsLink = true,
+  onSubmissionCreated,
 }: UploadVideoProps) => {
   const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false);
@@ -165,11 +173,11 @@ export const UploadVideo = ({
         setCampaigns(activeCampaigns);
       }
     } catch (err) {
-      console.error("Error fetching campaigns:", err);
+      console.error("Erro ao carregar campanhas:", err);
       if (fixedCampaign && fixedCampaignId) {
         setCampaigns([fixedCampaign as Campaign]);
       } else {
-        toast.error("Failed to load campaigns");
+        toast.error("Não foi possível carregar as campanhas");
       }
     }
   };
@@ -179,8 +187,8 @@ export const UploadVideo = ({
       const data = await apiClient.pages.list();
       setPages(data || []);
     } catch (err) {
-      console.error("Error fetching pages:", err);
-      toast.error("Failed to load approved pages");
+      console.error("Erro ao carregar páginas:", err);
+      toast.error("Não foi possível carregar suas páginas aprovadas");
     }
   };
 
@@ -193,7 +201,7 @@ export const UploadVideo = ({
       const token = await getNeonAccessToken();
 
       if (!token) {
-        throw new Error("Missing login token. Please sign out and sign in again.");
+        throw new Error("Token de login ausente. Saia e entre novamente.");
       }
 
       const response = await fetch(`${API_BASE}/api/tiktok/videos`, {
@@ -206,18 +214,18 @@ export const UploadVideo = ({
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || json.details || "Failed to load TikTok videos");
+        throw new Error(json.error || json.details || "Não foi possível carregar vídeos do TikTok");
       }
 
       const videos = Array.isArray(json.data) ? json.data : [];
       setTikTokVideos(videos);
 
       if (videos.length === 0) {
-        toast.info("TikTok connected, but no public videos were returned.");
+        toast.info("TikTok conectado, mas nenhum vídeo público foi retornado.");
       }
     } catch (err: any) {
-      console.error("TikTok videos error:", err);
-      toast.error(err.message || "Failed to load TikTok videos");
+      console.error("Erro nos vídeos do TikTok:", err);
+      toast.error(err.message || "Não foi possível carregar vídeos do TikTok");
       setTikTokVideos([]);
     } finally {
       setIsLoadingTikTokVideos(false);
@@ -290,24 +298,24 @@ export const UploadVideo = ({
     event.preventDefault();
 
     if (!userId) {
-      toast.error("You must be logged in to submit");
+      toast.error("Você precisa estar logado para enviar conteúdo");
       return;
     }
 
     const selectedPage = pages.find((page) => page.id === selectedPageId);
 
     if (!selectedPage || selectedPage.verified !== true) {
-      toast.error("Select one of your approved pages before submitting.");
+      toast.error("Selecione uma das suas páginas aprovadas antes de enviar.");
       return;
     }
 
     if (!pageMatchesRequiredTags(selectedPage, selectedCampaignRequiredTags)) {
-      toast.error("The selected page does not match this campaign's required tags.");
+      toast.error("A página selecionada não atende às tags obrigatórias desta campanha.");
       return;
     }
 
     if (platform === "tiktok" && !selectedTikTokVideoId) {
-      toast.error("Choose one of your authorized TikTok videos.");
+      toast.error("Escolha um dos seus vídeos autorizados do TikTok.");
       return;
     }
 
@@ -326,7 +334,7 @@ export const UploadVideo = ({
       const campaign = campaigns.find((item) => item.id === validated.campaignId);
 
       if (campaign && new Date(campaign.end_date) < new Date()) {
-        toast.error("This campaign has ended and is no longer accepting submissions");
+        toast.error("Esta campanha terminou e não aceita mais envios");
         return;
       }
 
@@ -336,7 +344,7 @@ export const UploadVideo = ({
         allowedPlatforms.length > 0 &&
         !allowedPlatforms.includes(selectedPage.platform)
       ) {
-        toast.error(`This campaign does not accept ${selectedPage.platform} submissions`);
+        toast.error(`Esta campanha não aceita envios de ${normalizePlatform(selectedPage.platform)}`);
         return;
       }
 
@@ -358,10 +366,11 @@ export const UploadVideo = ({
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || json.details || "Failed to create submission");
+        throw new Error(json.error || json.details || "Não foi possível criar o envio");
       }
 
-      toast.success("Submission uploaded for review!");
+      toast.success("Conteúdo enviado para análise.");
+      onSubmissionCreated?.();
 
       if (!fixedCampaignId) {
         setSelectedCampaign("");
@@ -376,8 +385,8 @@ export const UploadVideo = ({
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
-        console.error("Submission error:", error);
-        toast.error(error.message || "Failed to submit");
+        console.error("Erro no envio:", error);
+        toast.error(error.message || "Não foi possível enviar");
       }
     } finally {
       setIsUploading(false);
@@ -385,11 +394,11 @@ export const UploadVideo = ({
   };
 
   return (
-    <Card className="bg-gradient-card border-border">
+    <Card className="somma-panel rounded-2xl">
       <CardHeader>
-        <CardTitle>Submit Content</CardTitle>
+        <CardTitle className="font-display text-3xl">Enviar conteúdo</CardTitle>
         <CardDescription>
-          Submit content from one of your approved pages.
+          Envie conteúdo usando uma das suas páginas aprovadas.
         </CardDescription>
       </CardHeader>
 
@@ -397,27 +406,27 @@ export const UploadVideo = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {fixedCampaignId ? (
             <div className="space-y-2">
-              <Label>Campaign</Label>
-              <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
-                <p className="font-medium">{selectedCampaignData?.title || "Selected campaign"}</p>
+              <Label>Campanha</Label>
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-3">
+                <p className="font-medium">{selectedCampaignData?.title || "Campanha selecionada"}</p>
                 {selectedCampaignData?.end_date && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Ends {new Date(selectedCampaignData.end_date).toLocaleDateString("pt-BR")}
+                    Termina em {new Date(selectedCampaignData.end_date).toLocaleDateString("pt-BR")}
                   </p>
                 )}
               </div>
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="campaign">Campaign *</Label>
+              <Label htmlFor="campaign">Campanha *</Label>
               <Select value={selectedCampaign} onValueChange={setSelectedCampaign} required>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a campaign" />
+                  <SelectValue placeholder="Selecione uma campanha" />
                 </SelectTrigger>
                 <SelectContent>
                   {allowedCampaigns.length === 0 ? (
                     <SelectItem value="_no_campaigns" disabled>
-                      No active campaigns available for this platform
+                      Nenhuma campanha ativa disponível para esta plataforma
                     </SelectItem>
                   ) : (
                     allowedCampaigns.map((campaign) => (
@@ -436,15 +445,15 @@ export const UploadVideo = ({
                   className="h-auto p-0 text-xs"
                   onClick={() => navigate(`/campaigns/${selectedCampaign}`)}
                 >
-                  View campaign details
+                  Ver detalhes da campanha
                 </Button>
               )}
             </div>
           )}
 
           {selectedCampaignData && selectedCampaignRequiredTags.length > 0 && (
-            <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Required tags</p>
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Tags obrigatórias</p>
               <div className="flex flex-wrap gap-2">
                 {selectedCampaignRequiredTags.map((tag) => (
                   <Badge key={tag} variant="secondary">
@@ -456,7 +465,7 @@ export const UploadVideo = ({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="platform">Platform *</Label>
+            <Label htmlFor="platform">Plataforma *</Label>
             <Select
               value={platform}
               onValueChange={(value) =>
@@ -465,7 +474,7 @@ export const UploadVideo = ({
               required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select platform" />
+                <SelectValue placeholder="Selecione a plataforma" />
               </SelectTrigger>
               <SelectContent>
                 {(selectedCampaignPlatforms.length === 0 || selectedCampaignPlatforms.includes("instagram")) && (
@@ -483,20 +492,20 @@ export const UploadVideo = ({
 
           {platform && (
             <div className="space-y-2">
-              <Label htmlFor="page">Approved Page *</Label>
+              <Label htmlFor="page">Página aprovada *</Label>
               <Select value={selectedPageId} onValueChange={setSelectedPageId} required>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select one of your approved pages" />
+                  <SelectValue placeholder="Selecione uma das suas páginas aprovadas" />
                 </SelectTrigger>
                 <SelectContent>
                   {approvedPages.length === 0 ? (
                     <SelectItem value="_no_pages" disabled>
-                      No eligible approved {normalizePlatform(platform)} pages found
+                      Nenhuma página aprovada elegível de {normalizePlatform(platform)} foi encontrada
                     </SelectItem>
                   ) : (
                     approvedPages.map((page) => (
                       <SelectItem key={page.id} value={page.id}>
-                        {page.handle} · {page.platform}
+                        {page.handle} · {normalizePlatform(page.platform)}
                       </SelectItem>
                     ))
                   )}
@@ -504,7 +513,7 @@ export const UploadVideo = ({
               </Select>
               {approvedPages.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Go to Pages and connect/verify this platform. If the campaign has required tags, your page must include at least one matching tag.
+                  Vá para Páginas e conecte/verifique esta plataforma. Se a campanha exige tags, sua página precisa ter pelo menos uma tag correspondente.
                 </p>
               )}
             </div>
@@ -513,16 +522,17 @@ export const UploadVideo = ({
           {platform === "tiktok" ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="tiktokVideo">Authorized TikTok Video *</Label>
+                <Label htmlFor="tiktokVideo">Vídeo autorizado do TikTok *</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={fetchTikTokVideos}
                   disabled={isLoadingTikTokVideos}
+                  className="rounded-full"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
+                  Atualizar
                 </Button>
               </div>
 
@@ -536,15 +546,15 @@ export const UploadVideo = ({
                   <SelectValue
                     placeholder={
                       isLoadingTikTokVideos
-                        ? "Loading TikTok videos..."
-                        : "Choose a video from your connected TikTok"
+                        ? "Carregando vídeos do TikTok..."
+                        : "Escolha um vídeo do TikTok conectado"
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
                   {tiktokVideos.length === 0 ? (
                     <SelectItem value="_no_tiktok_videos" disabled>
-                      No TikTok videos found
+                      Nenhum vídeo do TikTok encontrado
                     </SelectItem>
                   ) : (
                     tiktokVideos.map((video) => (
@@ -563,7 +573,7 @@ export const UploadVideo = ({
                       {selectedTikTokVideo.cover_image_url && (
                         <img
                           src={selectedTikTokVideo.cover_image_url}
-                          alt="TikTok video cover"
+                          alt="Capa do vídeo do TikTok"
                           className="h-20 w-20 rounded-md object-cover"
                         />
                       )}
@@ -575,13 +585,13 @@ export const UploadVideo = ({
 
                         <div className="flex flex-wrap gap-2">
                           <Badge variant="secondary">
-                            {formatCount(selectedTikTokVideo.view_count)} views
+                            {formatCount(selectedTikTokVideo.view_count)} visualizações
                           </Badge>
                           <Badge variant="secondary">
-                            {formatCount(selectedTikTokVideo.like_count)} likes
+                            {formatCount(selectedTikTokVideo.like_count)} curtidas
                           </Badge>
                           <Badge variant="secondary">
-                            {formatCount(selectedTikTokVideo.comment_count)} comments
+                            {formatCount(selectedTikTokVideo.comment_count)} comentários
                           </Badge>
                         </div>
 
@@ -592,7 +602,7 @@ export const UploadVideo = ({
                             rel="noopener noreferrer"
                             className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                           >
-                            View on TikTok
+                            Ver no TikTok
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
@@ -606,7 +616,7 @@ export const UploadVideo = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="postUrl">Post URL *</Label>
+              <Label htmlFor="postUrl">URL do post *</Label>
               <Input
                 id="postUrl"
                 type="url"
@@ -617,31 +627,31 @@ export const UploadVideo = ({
                 maxLength={500}
               />
               <p className="text-xs text-muted-foreground">
-                This URL must belong to the approved page selected above.
+                Esta URL precisa pertencer à página aprovada selecionada acima.
               </p>
             </div>
           )}
 
           {selectedCampaignData?.audio_url && (
             <div className="space-y-2">
-              <Label htmlFor="audioUrl">Audio URL (Optional)</Label>
+              <Label htmlFor="audioUrl">URL do áudio (opcional)</Label>
               <Input
                 id="audioUrl"
                 type="url"
-                placeholder="Link to the audio used in your video..."
+                placeholder="Link do áudio usado no seu vídeo..."
                 value={audioUrl}
                 onChange={(event) => setAudioUrl(event.target.value)}
                 maxLength={500}
               />
               <p className="text-xs text-muted-foreground">
-                Provide the audio link if you used the campaign's required audio.
+                Envie o link do áudio se você usou o áudio obrigatório da campanha.
               </p>
             </div>
           )}
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full rounded-full"
             disabled={
               isUploading ||
               !selectedCampaign ||
@@ -652,11 +662,10 @@ export const UploadVideo = ({
             }
           >
             <Upload className="h-4 w-4 mr-2" />
-            {isUploading ? "Submitting..." : "Submit Content"}
+            {isUploading ? "Enviando..." : "Enviar conteúdo"}
           </Button>
         </form>
       </CardContent>
     </Card>
   );
 };
-
