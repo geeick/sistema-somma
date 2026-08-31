@@ -4,7 +4,6 @@ import apiClient from "@/integrations/apiClient";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Instagram, Play, Youtube, Calendar, DollarSign, Target } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -53,6 +52,16 @@ function normalizeCampaign(campaign: any): Campaign {
   };
 }
 
+function normalizePlatform(platform: string) {
+  const labels: Record<string, string> = {
+    instagram: "Instagram",
+    tiktok: "TikTok",
+    youtube_shorts: "YouTube Shorts",
+  };
+
+  return labels[platform] || platform.replace("_", " ");
+}
+
 const platformIcons = {
   instagram: Instagram,
   tiktok: Play,
@@ -72,7 +81,7 @@ const Campaigns = () => {
         const data = await apiClient.campaigns.active();
         setCampaigns(Array.isArray(data) ? data.map(normalizeCampaign) : []);
       } catch (err) {
-        console.error("Error fetching campaigns:", err);
+        console.error("Erro ao carregar campanhas:", err);
         setCampaigns([]);
       }
       setIsLoading(false);
@@ -88,47 +97,48 @@ const Campaigns = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen somma-shell">
         <Navbar />
         <div className="container mx-auto px-4 pt-24 pb-12">
-          <p className="text-center text-muted-foreground">Loading campaigns...</p>
+          <p className="text-center text-muted-foreground">Carregando campanhas...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen somma-shell">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-12">
+      <div className="container mx-auto px-4 pt-28 pb-12">
         <div className="max-w-6xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Active Campaigns</h1>
-            <p className="text-muted-foreground">Browse and join campaigns that match your pages</p>
+          <div className="somma-dark-panel somma-grain rounded-[2rem] p-8">
+            <p className="text-primary font-semibold mb-2">Movimentos ativos</p>
+            <h1 className="font-display text-5xl font-black mb-3 text-[#f7ead1]">Campanhas ativas</h1>
+            <p className="text-[#f7ead1]/75">Explore campanhas que combinam com suas páginas e participe dos próximos lançamentos.</p>
           </div>
 
           <Input
-            placeholder="Search campaigns..."
+            placeholder="Buscar campanhas..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-md"
           />
 
           {filteredCampaigns.length === 0 ? (
-            <Card className="bg-gradient-card border-border">
+            <Card className="somma-panel rounded-2xl">
               <CardContent className="pt-6 text-center text-muted-foreground">
-                {searchTerm ? "No campaigns found matching your search." : "No active campaigns available at the moment."}
+                {searchTerm ? "Nenhuma campanha corresponde à sua busca." : "Nenhuma campanha ativa disponível no momento."}
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4">
               {filteredCampaigns.map((campaign) => (
-                <Card key={campaign.id} className="bg-gradient-card border-border hover:border-primary/50 transition-all cursor-pointer" onClick={() => navigate(`/campaigns/${campaign.id}`)}>
+                <Card key={campaign.id} className="somma-panel rounded-2xl hover:border-primary/50 transition-all cursor-pointer" onClick={() => navigate(`/campaigns/${campaign.id}`)}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <CardTitle className="text-xl">{campaign.title}</CardTitle>
+                          <CardTitle className="font-display text-2xl">{campaign.title}</CardTitle>
                           {campaign.code && (
                             <Badge variant="secondary" className="font-mono text-xs">
                               {campaign.code}
@@ -136,16 +146,16 @@ const Campaigns = () => {
                           )}
                         </div>
                         {campaign.client && (
-                          <CardDescription className="mt-1">Client: {campaign.client}</CardDescription>
+                          <CardDescription className="mt-1">Cliente: {campaign.client}</CardDescription>
                         )}
                       </div>
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2 ml-4 flex-wrap justify-end">
                         {campaign.platforms.map((platform) => {
                           const Icon = platformIcons[platform as keyof typeof platformIcons];
                           return Icon ? (
                             <Badge key={platform} variant="outline" className="gap-1">
                               <Icon className="h-3 w-3" />
-                              {platform.replace("_", " ")}
+                              {normalizePlatform(platform)}
                             </Badge>
                           ) : null;
                         })}
@@ -156,21 +166,21 @@ const Campaigns = () => {
                     {campaign.brief && (
                       <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{campaign.brief}</p>
                     )}
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-4 w-4" />
-                        {new Date(campaign.end_date).toLocaleDateString('pt-BR')}
+                        Termina em {new Date(campaign.end_date).toLocaleDateString('pt-BR')}
                       </span>
                       {isAdmin && campaign.budget && (
                         <span className="flex items-center gap-1 text-primary font-semibold">
                           <DollarSign className="h-4 w-4" />
-                          R$ {campaign.budget.toLocaleString()}
+                          R$ {campaign.budget.toLocaleString("pt-BR")}
                         </span>
                       )}
                       {campaign.required_tags.length > 0 && (
                         <span className="flex items-center gap-1">
                           <Target className="h-4 w-4" />
-                          {campaign.required_tags.length} tags
+                          {campaign.required_tags.length} tags obrigatórias
                         </span>
                       )}
                     </div>
