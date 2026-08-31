@@ -73,19 +73,19 @@ const Index = () => {
 
       <main className="pt-24 pb-16">
         <section id="descobrir" className="container mx-auto px-4">
-          <div className="mx-auto max-w-[1400px]">
-            <div className="somma-dark-panel somma-grain rounded-[2rem] overflow-hidden min-h-[590px] grid lg:grid-cols-[1.02fr_0.98fr] items-stretch">
-              <div className="relative z-10 p-7 md:p-12 lg:p-14 flex flex-col justify-center">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#f7ead1]/22 bg-[#f7ead1]/8 px-4 py-2 text-xs font-bold text-[#f7ead1] w-fit mb-7 uppercase tracking-[0.16em]">
+          <div className="mx-auto max-w-[1320px]">
+            <div className="somma-dark-panel somma-grain rounded-[2rem] overflow-hidden grid lg:grid-cols-[1.02fr_0.98fr] items-stretch">
+              <div className="relative z-10 p-7 md:p-12 lg:p-14 min-h-[540px] flex flex-col justify-center">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#f7ead1]/22 bg-[#f7ead1]/8 px-4 py-2 text-xs font-bold text-[#f7ead1] w-fit mb-7 uppercase tracking-[0.16em] font-ui">
                   <Sparkles className="h-4 w-4 text-[hsl(var(--somma-pink))]" />
                   Somma para campanhas de música e criadores
                 </div>
 
-                <h1 className="font-display max-w-[760px] text-[clamp(3.35rem,5.65vw,6.35rem)] leading-[0.9] font-black tracking-[-0.045em] text-[#f7ead1] drop-shadow mb-7">
+                <h1 className="font-display max-w-[720px] text-[clamp(3.2rem,5.4vw,6.1rem)] leading-[0.9] font-black tracking-[-0.045em] text-[#f7ead1] drop-shadow mb-7">
                   Transforme músicas em movimentos culturais
                 </h1>
 
-                <p className="max-w-[590px] font-ui text-base md:text-lg text-[#f7ead1]/82 mb-8 leading-relaxed">
+                <p className="max-w-[570px] font-ui text-base md:text-lg text-[#f7ead1]/82 mb-8 leading-relaxed">
                   A Somma conecta artistas, marcas e criadores para lançar campanhas, medir impacto e pagar criadores com clareza.
                 </p>
 
@@ -99,12 +99,27 @@ const Index = () => {
                 </div>
               </div>
 
-              <div className="relative min-h-[400px] lg:min-h-[590px] overflow-hidden">
-                <div className="absolute inset-y-0 left-0 w-[44%] retro-stripes opacity-95 rounded-r-[60%]" />
-                <div className="absolute right-[-118px] top-1/2 h-[540px] w-[540px] -translate-y-1/2">
-                  <div className="absolute inset-0 rounded-full record-art" />
-                  <div className="absolute left-1/2 top-1/2 z-20 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[hsl(var(--somma-pink))] text-white shadow-pink-glow">
+              <div className="hero-art-card">
+                <div className="vinyl-sleeve" />
+
+                <div className="record-scene" aria-hidden="true">
+                  <div className="record-disc" />
+                  <div className="record-label-ring" />
+                  <div className="record-label-core">
                     <span className="font-display text-2xl font-black tracking-[-0.03em]">somma</span>
+                  </div>
+                </div>
+
+                <div className="hero-mini-card p-5">
+                  <p className="font-ui text-[0.68rem] font-extrabold uppercase tracking-[0.18em] text-[hsl(var(--somma-pink))] mb-3">
+                    Campanha ativa
+                  </p>
+                  <p className="font-display text-2xl font-black leading-none mb-3">
+                    música + criadores
+                  </p>
+                  <div className="flex items-center justify-between rounded-full bg-white/60 px-3 py-2 text-xs font-bold text-muted-foreground">
+                    <span>impacto</span>
+                    <span className="text-foreground">+24%</span>
                   </div>
                 </div>
               </div>
