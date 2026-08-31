@@ -4,45 +4,45 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Somma retro music system: warm paper, vinyl browns, golden movement accents, and restrained Somma pink. */
+/* Somma visual system: editorial cream, deep vinyl brown, restrained hot-pink accent. */
 
 @layer base {
   :root {
-    --background: 38 53% 92%;
-    --foreground: 25 39% 14%;
+    --background: 38 55% 93%;
+    --foreground: 24 38% 15%;
 
-    --card: 39 57% 94%;
-    --card-foreground: 25 39% 14%;
+    --card: 39 63% 95%;
+    --card-foreground: 24 38% 15%;
 
-    --popover: 39 57% 94%;
-    --popover-foreground: 25 39% 14%;
+    --popover: 39 63% 95%;
+    --popover-foreground: 24 38% 15%;
 
-    --primary: 32 91% 49%;
-    --primary-foreground: 24 48% 11%;
+    --primary: 32 93% 49%;
+    --primary-foreground: 25 43% 12%;
 
-    --secondary: 28 47% 24%;
-    --secondary-foreground: 39 64% 93%;
+    --secondary: 27 43% 23%;
+    --secondary-foreground: 40 68% 93%;
 
     --muted: 35 39% 84%;
-    --muted-foreground: 27 28% 35%;
+    --muted-foreground: 26 24% 39%;
 
-    --accent: 43 88% 57%;
-    --accent-foreground: 24 48% 11%;
+    --accent: 42 88% 58%;
+    --accent-foreground: 25 43% 12%;
 
     --destructive: 4 74% 40%;
     --destructive-foreground: 39 64% 93%;
 
-    --border: 32 29% 66%;
-    --input: 37 42% 88%;
+    --border: 33 30% 69%;
+    --input: 37 43% 88%;
     --ring: 327 94% 51%;
     --somma-pink: 327 94% 51%;
 
-    --radius: 0.85rem;
+    --radius: 0.95rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(42 91% 59%), hsl(29 86% 47%), hsl(327 94% 51%));
-    --gradient-card: linear-gradient(145deg, hsl(40 66% 96%), hsl(34 44% 86%));
-    --shadow-glow: 0 18px 56px hsl(27 73% 31% / 0.22);
-    --shadow-pink-glow: 0 16px 50px hsl(327 94% 51% / 0.24);
+    --gradient-primary: linear-gradient(135deg, hsl(42 91% 59%), hsl(31 92% 50%));
+    --gradient-card: linear-gradient(145deg, hsl(40 70% 97%), hsl(35 45% 88%));
+    --shadow-glow: 0 18px 46px hsl(30 86% 45% / 0.2);
+    --shadow-pink-glow: 0 16px 40px hsl(327 94% 51% / 0.22);
   }
 }
 
@@ -60,25 +60,21 @@
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background-image:
-      radial-gradient(circle at 20% 10%, hsl(327 94% 51% / 0.07), transparent 24rem),
-      radial-gradient(circle at 85% 18%, hsl(20 68% 33% / 0.14), transparent 24rem),
-      linear-gradient(180deg, hsl(39 66% 96%), hsl(35 42% 86%));
+      radial-gradient(circle at 18% 9%, hsl(var(--somma-pink) / 0.055), transparent 26rem),
+      radial-gradient(circle at 82% 14%, hsl(31 92% 50% / 0.12), transparent 27rem),
+      linear-gradient(180deg, hsl(40 72% 97%), hsl(36 43% 87%));
     line-height: 1.45;
   }
 
   h1, h2, h3, .font-display {
     font-family: "Fraunces", Georgia, "Times New Roman", serif;
-    letter-spacing: -0.045em;
+    letter-spacing: -0.042em;
   }
 
   .font-ui {
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: -0.015em;
+    letter-spacing: 0;
   }
-
-  h1 { font-size: clamp(3.4rem, 8vw, 6.85rem); }
-  h2 { font-size: clamp(2.25rem, 4.7vw, 4.4rem); }
-  h3 { font-size: clamp(1.35rem, 2.7vw, 2.2rem); }
 
   ::selection {
     background: hsl(var(--somma-pink) / 0.22);
@@ -92,32 +88,32 @@
   }
 
   .somma-nav {
-    background: linear-gradient(90deg, hsl(27 48% 13% / 0.97), hsl(23 39% 10% / 0.95));
-    border-bottom: 1px solid hsl(var(--somma-pink) / 0.18);
+    background: linear-gradient(90deg, hsl(25 43% 14% / 0.98), hsl(23 40% 10% / 0.96));
+    border-bottom: 1px solid hsl(35 60% 85% / 0.12);
     color: hsl(40 70% 93%);
   }
 
   .somma-shell {
     background:
-      radial-gradient(circle at 18% 8%, hsl(var(--somma-pink) / 0.06), transparent 22rem),
-      radial-gradient(circle at 78% 18%, hsl(24 73% 42% / 0.12), transparent 24rem),
-      linear-gradient(180deg, hsl(39 66% 96%), hsl(35 42% 86%));
+      radial-gradient(circle at 16% 8%, hsl(var(--somma-pink) / 0.055), transparent 24rem),
+      radial-gradient(circle at 78% 18%, hsl(31 92% 50% / 0.11), transparent 26rem),
+      linear-gradient(180deg, hsl(40 72% 97%), hsl(36 43% 87%));
   }
 
   .somma-panel {
-    background: linear-gradient(145deg, hsl(42 69% 95%), hsl(35 43% 86%));
+    background: linear-gradient(145deg, hsl(40 70% 97%), hsl(35 45% 88%));
     border: 1px solid hsl(31 36% 50% / 0.26);
-    box-shadow: 0 20px 48px hsl(25 49% 18% / 0.11);
+    box-shadow: 0 18px 42px hsl(25 49% 18% / 0.1);
   }
 
   .somma-dark-panel {
     background:
-      radial-gradient(circle at 76% 50%, hsl(var(--somma-pink) / 0.08), transparent 17rem),
-      radial-gradient(circle at 15% 14%, hsl(32 91% 49% / 0.13), transparent 14rem),
-      linear-gradient(135deg, hsl(28 51% 15%), hsl(23 42% 9%));
-    border: 1px solid hsl(36 50% 72% / 0.18);
+      radial-gradient(circle at 12% 16%, hsl(32 93% 49% / 0.12), transparent 16rem),
+      radial-gradient(circle at 76% 48%, hsl(var(--somma-pink) / 0.1), transparent 16rem),
+      linear-gradient(135deg, hsl(27 50% 16%), hsl(22 44% 9%));
+    border: 1px solid hsl(35 60% 85% / 0.15);
     color: hsl(40 70% 93%);
-    box-shadow: 0 24px 68px hsl(25 49% 18% / 0.22);
+    box-shadow: 0 22px 60px hsl(25 49% 18% / 0.2);
   }
 
   .somma-grain {
@@ -130,58 +126,137 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.12;
+    opacity: 0.11;
     background-image:
       radial-gradient(hsl(35 25% 16% / 0.18) 0.8px, transparent 0.8px),
-      radial-gradient(hsl(var(--somma-pink) / 0.1) 0.8px, transparent 0.8px);
-    background-size: 18px 18px, 26px 26px;
+      radial-gradient(hsl(42 70% 82% / 0.18) 0.8px, transparent 0.8px);
+    background-size: 18px 18px, 28px 28px;
     background-position: 0 0, 8px 10px;
     mix-blend-mode: multiply;
   }
 
-  .record-art {
-    background:
-      radial-gradient(circle at center, hsl(24 38% 9%) 0 7%, hsl(28 78% 47%) 7.5% 11%, hsl(22 42% 10%) 11.5% 17%, transparent 17.5%),
-      repeating-radial-gradient(circle at center, hsl(24 38% 9%) 0 10px, hsl(26 34% 16%) 11px 13px, hsl(24 38% 9%) 14px 22px);
-    box-shadow: inset 0 0 0 12px hsl(28 42% 8% / 0.8), 0 28px 70px hsl(24 59% 7% / 0.38);
-    transform-origin: center;
-    animation: record-spin 28s linear infinite;
+  .somma-card-hover {
+    transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease, background 240ms ease;
+  }
+
+  .somma-card-hover:hover {
+    transform: translateY(-4px);
+    border-color: hsl(var(--somma-pink) / 0.24);
+    box-shadow: 0 22px 56px hsl(25 49% 18% / 0.13);
   }
 
   .retro-stripes {
-    background: linear-gradient(90deg, hsl(var(--somma-pink)), hsl(43 85% 62%), hsl(34 78% 49%), hsl(25 58% 36%));
+    background: linear-gradient(90deg, hsl(var(--somma-pink)), hsl(35 92% 57%) 35%, hsl(40 88% 61%) 67%, hsl(28 61% 40%));
   }
 
   .shadow-pink-glow {
     box-shadow: var(--shadow-pink-glow);
   }
 
-  .somma-card-hover {
-    transition: transform 260ms ease, box-shadow 260ms ease, border-color 260ms ease, background 260ms ease;
+  .hero-art-card {
+    position: relative;
+    min-height: 510px;
+    height: 100%;
+    overflow: hidden;
+    background:
+      linear-gradient(135deg, hsl(37 72% 89% / 0.08), transparent 42%),
+      linear-gradient(180deg, hsl(24 45% 14%), hsl(20 44% 8%));
   }
 
-  .somma-card-hover:hover {
-    transform: translateY(-5px) rotate(-0.18deg);
-    border-color: hsl(var(--somma-pink) / 0.22);
-    box-shadow: 0 22px 60px hsl(327 94% 51% / 0.09), 0 18px 48px hsl(25 49% 18% / 0.14);
+  .hero-art-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(hsl(40 70% 92% / 0.045) 1px, transparent 1px), linear-gradient(90deg, hsl(40 70% 92% / 0.035) 1px, transparent 1px);
+    background-size: 38px 38px;
+    opacity: 0.42;
   }
 
-  .reveal-on-scroll {
-    animation: reveal-rise both;
-    animation-timeline: view();
-    animation-range: entry 8% cover 30%;
+  .record-scene {
+    position: absolute;
+    left: 50%;
+    top: 48%;
+    width: min(78vw, 440px);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+  }
+
+  .record-disc {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background:
+      repeating-radial-gradient(circle at center, hsl(24 38% 9%) 0 11px, hsl(26 34% 16%) 12px 14px, hsl(24 38% 9%) 15px 24px),
+      radial-gradient(circle at center, hsl(24 38% 8%), hsl(24 38% 4%));
+    box-shadow: inset 0 0 0 12px hsl(28 42% 8% / 0.85), 0 30px 80px hsl(24 59% 7% / 0.38);
+    animation: record-spin 32s linear infinite;
+  }
+
+  .record-label-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    height: 9.5rem;
+    width: 9.5rem;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    background: hsl(29 90% 49%);
+    box-shadow: 0 0 46px hsl(327 94% 51% / 0.12);
+  }
+
+  .record-label-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 2;
+    display: flex;
+    height: 7rem;
+    width: 7rem;
+    transform: translate(-50%, -50%);
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: hsl(var(--somma-pink));
+    color: white;
+    box-shadow: var(--shadow-pink-glow);
+  }
+
+  .vinyl-sleeve {
+    position: absolute;
+    left: -7%;
+    top: 50%;
+    width: 52%;
+    height: 76%;
+    transform: translateY(-50%);
+    border-radius: 1.75rem;
+    background:
+      linear-gradient(90deg, hsl(var(--somma-pink)), hsl(35 92% 57%) 42%, hsl(42 85% 62%));
+    box-shadow: 18px 0 42px hsl(24 59% 7% / 0.22);
+  }
+
+  .hero-mini-card {
+    position: absolute;
+    right: 9%;
+    bottom: 10%;
+    width: min(18rem, 46%);
+    border-radius: 1.25rem;
+    border: 1px solid hsl(40 70% 92% / 0.2);
+    background: hsl(40 70% 92% / 0.92);
+    color: hsl(24 38% 15%);
+    box-shadow: 0 24px 52px hsl(24 59% 7% / 0.24);
+    backdrop-filter: blur(10px);
   }
 
   .artist-carousel {
     position: relative;
     overflow: hidden;
-    mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+    mask-image: linear-gradient(90deg, transparent, black 7%, black 93%, transparent);
   }
 
   .artist-carousel-track {
     display: flex;
     width: max-content;
-    gap: 0.75rem;
+    gap: 0.7rem;
     animation: artist-marquee 30s linear infinite;
   }
 
@@ -190,36 +265,35 @@
   }
 
   .artist-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.48rem;
     white-space: nowrap;
     border-radius: 999px;
-    border: 1px solid hsl(31 36% 50% / 0.24);
-    background: hsl(40 66% 96% / 0.95);
-    color: hsl(25 39% 14%);
-    padding: 0.6rem 1.08rem;
+    border: 1px solid hsl(31 36% 50% / 0.2);
+    background: hsl(40 70% 97% / 0.88);
+    color: hsl(24 38% 15%);
+    padding: 0.55rem 1rem;
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     font-size: 0.88rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    box-shadow: 0 10px 22px hsl(25 49% 18% / 0.07);
-    transition: transform 220ms ease, border-color 220ms ease, color 220ms ease, background 220ms ease;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    box-shadow: 0 9px 18px hsl(25 49% 18% / 0.055);
   }
 
   .artist-pill::before {
     content: "";
-    display: inline-block;
     width: 0.42rem;
     height: 0.42rem;
-    margin-right: 0.48rem;
     border-radius: 999px;
     background: hsl(var(--somma-pink));
-    vertical-align: 0.08rem;
+    box-shadow: 0 0 16px hsl(var(--somma-pink) / 0.35);
   }
 
-  .artist-pill:hover {
-    transform: translateY(-2px);
-    border-color: hsl(var(--somma-pink) / 0.45);
-    background: hsl(39 70% 98%);
-    color: hsl(var(--somma-pink));
+  .reveal-on-scroll {
+    animation: reveal-rise both;
+    animation-timeline: view();
+    animation-range: entry 8% cover 30%;
   }
 }
 
@@ -236,11 +310,21 @@
 @keyframes reveal-rise {
   from {
     opacity: 0;
-    transform: translateY(26px) scale(0.985);
+    transform: translateY(22px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1023px) {
+  .hero-art-card {
+    min-height: 420px;
+  }
+
+  .record-scene {
+    width: min(82vw, 390px);
   }
 }
 
