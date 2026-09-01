@@ -17,6 +17,25 @@ interface FeatureFlag {
   enabled: boolean;
 }
 
+const featureFlagLabels: Record<string, { label: string; description: string }> = {
+  leaderboard_enabled: {
+    label: 'Ranking de campanhas',
+    description: 'Ativa os rankings das campanhas',
+  },
+  audio_fingerprint_phase2: {
+    label: 'Identificação avançada de áudio',
+    description: 'Ativa a identificação avançada de áudio',
+  },
+  allow_resubmission: {
+    label: 'Reenvio de conteúdo',
+    description: 'Permite que criadores reenviem conteúdos rejeitados',
+  },
+  auto_payout_on_approval: {
+    label: 'Pagamento automático após aprovação',
+    description: 'Disponibiliza pagamentos automaticamente após a aprovação',
+  },
+};
+
 export default function SettingsAdmin() {
   const queryClient = useQueryClient();
   const [localFlags, setLocalFlags] = useState<Record<string, boolean>>({});
@@ -53,10 +72,10 @@ export default function SettingsAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-flags'] });
-      toast.success('Settings updated successfully');
+      toast.success('Configurações atualizadas com sucesso');
     },
     onError: () => {
-      toast.error('Failed to update settings');
+      toast.error('Não foi possível atualizar as configurações');
     },
   });
 
@@ -83,8 +102,8 @@ export default function SettingsAdmin() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-4xl font-bold mb-2">Settings</h1>
-        <p className="text-muted-foreground">System settings and configuration</p>
+        <h1 className="text-4xl font-bold mb-2">Configurações</h1>
+        <p className="text-muted-foreground">Configurações gerais do sistema</p>
       </div>
 
       <div className="grid gap-6">
@@ -93,10 +112,10 @@ export default function SettingsAdmin() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
-              Feature Flags
+              Controle de recursos
             </CardTitle>
             <CardDescription>
-              Enable or disable specific features across the platform
+              Ative ou desative recursos específicos da plataforma
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -107,13 +126,11 @@ export default function SettingsAdmin() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label htmlFor={flag.key} className="text-base font-medium">
-                          {flag.key.split('_').map(word => 
-                            word.charAt(0).toUpperCase() + word.slice(1)
-                          ).join(' ')}
+                          {featureFlagLabels[flag.key]?.label || flag.key.replaceAll('_', ' ')}
                         </Label>
                         {flag.description && (
                           <p className="text-sm text-muted-foreground">
-                            {flag.description}
+                            {featureFlagLabels[flag.key]?.description || flag.description}
                           </p>
                         )}
                       </div>
@@ -135,13 +152,13 @@ export default function SettingsAdmin() {
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     )}
                     <Save className="h-4 w-4 mr-2" />
-                    Save Changes
+                    Salvar alterações
                   </Button>
                 </div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No feature flags configured yet.
+                Nenhum controle de recurso configurado.
               </p>
             )}
           </CardContent>
@@ -150,14 +167,14 @@ export default function SettingsAdmin() {
         {/* System Configuration */}
         <Card>
           <CardHeader>
-            <CardTitle>System Configuration</CardTitle>
+            <CardTitle>Configuração do sistema</CardTitle>
             <CardDescription>
-              General system settings and integrations
+              Configurações gerais e integrações do sistema
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="min-withdrawal">Minimum Withdrawal Amount (BRL)</Label>
+              <Label htmlFor="min-withdrawal">Valor mínimo para saque (BRL)</Label>
               <Input
                 id="min-withdrawal"
                 type="number"
@@ -165,14 +182,14 @@ export default function SettingsAdmin() {
                 disabled
               />
               <p className="text-sm text-muted-foreground">
-                The minimum amount users can withdraw from their balance
+                Valor mínimo que os usuários podem sacar do saldo
               </p>
             </div>
             
             <Separator />
             
             <div className="space-y-2">
-              <Label htmlFor="max-strikes">Maximum Strikes Before Ban</Label>
+              <Label htmlFor="max-strikes">Máximo de advertências antes do bloqueio</Label>
               <Input
                 id="max-strikes"
                 type="number"
@@ -180,14 +197,14 @@ export default function SettingsAdmin() {
                 disabled
               />
               <p className="text-sm text-muted-foreground">
-                Number of strikes before a user is automatically banned
+                Número de advertências antes de o usuário ser bloqueado automaticamente
               </p>
             </div>
 
             <div className="flex justify-end pt-4">
               <Button disabled>
                 <Save className="h-4 w-4 mr-2" />
-                Save Configuration
+                Salvar configuração
               </Button>
             </div>
           </CardContent>

@@ -47,7 +47,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
   const token = await getNeonAccessToken();
 
   if (!token) {
-    throw new Error('No Neon Auth token found. Sign in again.');
+    throw new Error('Token de autenticação não encontrado. Entre novamente.');
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -63,7 +63,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     throw new Error(
-      `Backend returned ${res.status}: ${json?.error || json?.message || 'Unknown error'}`
+      `O servidor retornou ${res.status}: ${json?.error || json?.message || 'erro desconhecido'}`
     );
   }
 
@@ -79,9 +79,10 @@ function normalizeList(value: string[] | string | null | undefined): string[] {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) return parsed;
     } catch (_err) {
-      return value
+      const normalizedValue = value.trim().replace(/^\{(.*)\}$/, '$1');
+      return normalizedValue
         .split(',')
-        .map((item) => item.trim())
+        .map((item) => item.trim().replace(/^"|"$/g, ''))
         .filter(Boolean);
     }
   }
@@ -90,9 +91,9 @@ function normalizeList(value: string[] | string | null | undefined): string[] {
 }
 
 function formatDate(value: string | null | undefined) {
-  if (!value) return 'Not set';
+  if (!value) return 'Não informado';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not set';
+  if (Number.isNaN(date.getTime())) return 'Não informado';
   return date.toLocaleDateString('pt-BR');
 }
 
@@ -110,6 +111,17 @@ function formatMoney(value: number | string | null | undefined) {
 
 function formatNumber(value: number | string | null | undefined) {
   return asNumber(value).toLocaleString('pt-BR');
+}
+
+function formatPlatformLabel(platform: string) {
+  const labels: Record<string, string> = {
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    youtube: 'YouTube',
+    youtube_shorts: 'YouTube Shorts',
+  };
+
+  return labels[platform] || platform.replaceAll('_', ' ');
 }
 
 export default function CampaignsAdmin() {
@@ -133,11 +145,11 @@ export default function CampaignsAdmin() {
       setCampaigns(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error('Error fetching campaigns:', err);
-      setError(err.message || 'Failed to load campaigns');
+      setError(err.message || 'Não foi possível carregar as campanhas');
       setCampaigns([]);
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to load campaigns',
+        title: 'Erro',
+        description: err.message || 'Não foi possível carregar as campanhas',
         variant: 'destructive',
       });
     } finally {
@@ -152,16 +164,16 @@ export default function CampaignsAdmin() {
       });
 
       toast({
-        title: 'Success',
-        description: 'Campaign deleted successfully',
+        title: 'Sucesso',
+        description: 'Campanha excluída com sucesso',
       });
 
       await fetchCampaigns();
     } catch (err: any) {
       console.error('Error deleting campaign:', err);
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to delete campaign',
+        title: 'Erro',
+        description: err.message || 'Não foi possível excluir a campanha',
         variant: 'destructive',
       });
     } finally {
@@ -174,7 +186,7 @@ export default function CampaignsAdmin() {
       await adminRequest('/api/admin/campaigns', {
         method: 'POST',
         body: JSON.stringify({
-          title: `${campaign.title} (Copy)`,
+          title: `${campaign.title} (Cópia)`,
           code: campaign.code ? `${campaign.code}-copy` : null,
           client: campaign.client || null,
           brief: campaign.brief || null,
@@ -193,16 +205,16 @@ export default function CampaignsAdmin() {
       });
 
       toast({
-        title: 'Success',
-        description: 'Campaign duplicated successfully',
+        title: 'Sucesso',
+        description: 'Campanha duplicada com sucesso',
       });
 
       await fetchCampaigns();
     } catch (err: any) {
       console.error('Error duplicating campaign:', err);
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to duplicate campaign',
+        title: 'Erro',
+        description: err.message || 'Não foi possível duplicar a campanha',
         variant: 'destructive',
       });
     }
@@ -229,7 +241,7 @@ export default function CampaignsAdmin() {
         campaign.title,
         campaign.code || '',
         campaign.client || '',
-        campaign.status || '',
+        statusLabels[campaign.status || 'unknown'] || campaign.status || '',
         asNumber(campaign.budget).toString(),
         asNumber(campaign.total_payout).toFixed(2),
         asNumber(campaign.submission_count).toString(),
@@ -237,7 +249,7 @@ export default function CampaignsAdmin() {
         asNumber(campaign.total_views).toString(),
         formatDate(campaign.start_date),
         formatDate(campaign.end_date),
-        normalizeList(campaign.platforms).join('; '),
+        normalizeList(campaign.platforms).map(formatPlatformLabel).join('; '),
         normalizeList(campaign.required_tags).join('; '),
       ]),
     ];
@@ -266,8 +278,16 @@ export default function CampaignsAdmin() {
     archived: 'bg-gray-700',
   };
 
+  const statusLabels: Record<string, string> = {
+    draft: 'Rascunho',
+    active: 'Ativa',
+    closed: 'Encerrada',
+    archived: 'Arquivada',
+    unknown: 'Desconhecido',
+  };
+
   if (isLoading) {
-    return <div className="flex justify-center py-8">Loading campaigns...</div>;
+    return <div className="flex justify-center py-8">Carregando campanhas...</div>;
   }
 
   if (error) {
@@ -276,14 +296,14 @@ export default function CampaignsAdmin() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            Could not load campaigns
+            Não foi possível carregar as campanhas
           </CardTitle>
           <CardDescription>{error}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button onClick={fetchCampaigns}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Try Again
+            Tentar novamente
           </Button>
         </CardContent>
       </Card>
@@ -295,7 +315,7 @@ export default function CampaignsAdmin() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Gerenciamento de Campanhas</h1>
-          <p className="text-muted-foreground">Criar e gerenciar suas campanhas</p>
+          <p className="text-muted-foreground">Crie e gerencie suas campanhas</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportCsv} disabled={campaigns.length === 0}>
@@ -311,7 +331,7 @@ export default function CampaignsAdmin() {
       {campaigns.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No campaigns found yet.
+            Nenhuma campanha encontrada.
           </CardContent>
         </Card>
       ) : (
@@ -337,27 +357,27 @@ export default function CampaignsAdmin() {
                           </Badge>
                         )}
                         <Badge className={statusColors[status] || 'bg-gray-500'}>
-                          {status}
+                          {statusLabels[status] || status}
                         </Badge>
                       </CardTitle>
                       <CardDescription>
-                        Client: {campaign.client || 'N/A'} • Budget: {formatMoney(campaign.budget)}
+                        Cliente: {campaign.client || 'Não informado'} • Orçamento: {formatMoney(campaign.budget)}
                       </CardDescription>
                       <div className="mt-2 flex gap-4 text-sm flex-wrap">
                         <span className="text-primary font-medium">
-                          Spent: {formatMoney(totalPayout)}
+                          Gasto: {formatMoney(totalPayout)}
                         </span>
                         <span className="text-muted-foreground">
-                          {formatNumber(campaign.submission_count)} submissions
+                          {formatNumber(campaign.submission_count)} envios
                         </span>
                         <span className="text-muted-foreground">
-                          {formatNumber(campaign.participant_count)} participants
+                          {formatNumber(campaign.participant_count)} participantes
                         </span>
                         <span className="text-muted-foreground">
-                          {formatNumber(campaign.total_views)} views
+                          {formatNumber(campaign.total_views)} visualizações
                         </span>
                         <span className={remainingBudget < 0 ? 'text-destructive font-medium' : 'text-green-600 font-medium'}>
-                          Remaining: {formatMoney(remainingBudget)}
+                          Restante: {formatMoney(remainingBudget)}
                         </span>
                       </div>
                     </div>
@@ -389,29 +409,29 @@ export default function CampaignsAdmin() {
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Start Date</p>
+                      <p className="text-muted-foreground">Data de início</p>
                       <p className="font-medium">{formatDate(campaign.start_date)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">End Date</p>
+                      <p className="text-muted-foreground">Data de término</p>
                       <p className="font-medium">{formatDate(campaign.end_date)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Platforms</p>
+                      <p className="text-muted-foreground">Plataformas</p>
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {platforms.length > 0 ? (
                           platforms.map((platform) => (
                             <Badge key={platform} variant="secondary">
-                              {platform}
+                              {formatPlatformLabel(platform)}
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-muted-foreground">None</span>
+                          <span className="text-muted-foreground">Nenhuma</span>
                         )}
                       </div>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Required Tags</p>
+                      <p className="text-muted-foreground">Tags obrigatórias</p>
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {requiredTags.length > 0 ? (
                           requiredTags.map((tag) => (
@@ -420,7 +440,7 @@ export default function CampaignsAdmin() {
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-muted-foreground">Open</span>
+                          <span className="text-muted-foreground">Livre</span>
                         )}
                       </div>
                     </div>
@@ -435,15 +455,15 @@ export default function CampaignsAdmin() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Campaign</AlertDialogTitle>
+            <AlertDialogTitle>Excluir campanha</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this campaign? This action cannot be undone.
+              Tem certeza de que deseja excluir esta campanha? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteId && handleDelete(deleteId)}>
-              Delete
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -451,4 +471,3 @@ export default function CampaignsAdmin() {
     </div>
   );
 }
-

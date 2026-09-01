@@ -74,7 +74,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
   const token = await getNeonAccessToken();
 
   if (!token) {
-    throw new Error("No Neon Auth token found. Sign in again.");
+    throw new Error("Token de autenticação não encontrado. Entre novamente.");
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -90,8 +90,8 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     throw new Error(
-      `Backend returned ${res.status}: ${
-        json?.error || json?.message || "Unknown error"
+      `O servidor retornou ${res.status}: ${
+        json?.error || json?.message || "erro desconhecido"
       }`
     );
   }
@@ -111,9 +111,9 @@ function formatMoney(value?: number | string | null) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Not set";
+  if (!value) return "Não informado";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
+  if (Number.isNaN(date.getTime())) return "Não informado";
   return date.toLocaleDateString("pt-BR");
 }
 
@@ -136,7 +136,7 @@ function normalizeTags(tags: Page["tags"]) {
 }
 
 function normalizePlatform(platform?: string | null) {
-  if (!platform) return "unknown";
+  if (!platform) return "desconhecida";
   return platform.replace("_", " ");
 }
 
@@ -185,13 +185,13 @@ export default function CreatorsAdmin() {
       setPages(Array.isArray(pageData) ? pageData : []);
     } catch (err: any) {
       console.error("Failed to load creators/pages:", err);
-      setError(err.message || "Failed to load creators and pages");
+      setError(err.message || "Não foi possível carregar os criadores e as páginas");
       setCreators([]);
       setPages([]);
 
       toast({
-        title: "Error",
-        description: "Failed to load creators and pages",
+        title: "Erro",
+        description: "Não foi possível carregar os criadores e as páginas",
         variant: "destructive",
       });
     } finally {
@@ -299,14 +299,14 @@ export default function CreatorsAdmin() {
       );
 
       toast({
-        title: "Success",
-        description: verified ? "Page verified" : "Page unverified",
+        title: "Sucesso",
+        description: verified ? "Página verificada" : "Verificação da página removida",
       });
     } catch (err: any) {
       console.error("Failed to update page:", err);
       toast({
-        title: "Error",
-        description: err.message || "Failed to update page",
+        title: "Erro",
+        description: err.message || "Não foi possível atualizar a página",
         variant: "destructive",
       });
     } finally {
@@ -318,14 +318,14 @@ export default function CreatorsAdmin() {
     exportCsv(`creators-${new Date().toISOString()}.csv`, [
       [
         "ID",
-        "Name",
-        "Email",
-        "Role",
-        "Pages",
-        "Submissions",
-        "Views",
-        "Earned",
-        "Created",
+        "Nome",
+        "E-mail",
+        "Função",
+        "Páginas",
+        "Envios",
+        "Visualizações",
+        "Ganhos",
+        "Criado em",
       ],
       ...filteredCreators.map((creator) => [
         creator.id,
@@ -345,14 +345,14 @@ export default function CreatorsAdmin() {
     exportCsv(`pages-${new Date().toISOString()}.csv`, [
       [
         "ID",
-        "User ID",
-        "Platform",
-        "Handle",
+        "ID do usuário",
+        "Plataforma",
+        "Perfil",
         "URL",
-        "Followers",
-        "Verified",
+        "Seguidores",
+        "Verificada",
         "Tags",
-        "Created",
+        "Criado em",
       ],
       ...filteredPages.map((page) => [
         page.id,
@@ -361,7 +361,7 @@ export default function CreatorsAdmin() {
         page.handle || "",
         page.url || "",
         page.follower_count || 0,
-        page.verified ? "yes" : "no",
+        page.verified ? "sim" : "não",
         normalizeTags(page.tags).join("; "),
         formatDate(page.created_at),
       ]),
@@ -372,9 +372,9 @@ export default function CreatorsAdmin() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Creators & Pages</h1>
+          <h1 className="text-3xl font-bold">Criadores e páginas</h1>
           <p className="text-muted-foreground">
-            Loading creators and pages...
+            Carregando criadores e páginas...
           </p>
         </div>
       </div>
@@ -389,7 +389,7 @@ export default function CreatorsAdmin() {
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-8 w-8 text-destructive" />
               <div>
-                <CardTitle>Could not load creators and pages</CardTitle>
+                <CardTitle>Não foi possível carregar os criadores e as páginas</CardTitle>
                 <p className="text-muted-foreground">{error}</p>
               </div>
             </div>
@@ -398,19 +398,19 @@ export default function CreatorsAdmin() {
           <CardContent className="space-y-4">
             <Button onClick={loadData}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try again
+              Tentar novamente
             </Button>
 
             <div className="rounded-lg bg-muted p-4">
-              <p className="font-semibold mb-2">Debug info</p>
+              <p className="font-semibold mb-2">Informações técnicas</p>
               <pre className="text-xs whitespace-pre-wrap overflow-x-auto">
                 {JSON.stringify(rawResponse, null, 2)}
               </pre>
             </div>
 
             <p className="text-sm text-muted-foreground">
-              If this says Backend returned 500, the backend
-              /api/admin/creators or /api/admin/pages route needs to be updated.
+              Se a mensagem indicar erro 500, as rotas /api/admin/creators ou
+              /api/admin/pages do servidor precisam ser atualizadas.
             </p>
           </CardContent>
         </Card>
@@ -421,16 +421,16 @@ export default function CreatorsAdmin() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Creators & Pages</h1>
+        <h1 className="text-3xl font-bold">Criadores e páginas</h1>
         <p className="text-muted-foreground">
-          Manage creators, pages, and verification.
+          Gerencie criadores, páginas e verificações.
         </p>
       </div>
 
       <Tabs defaultValue="creators" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="creators">Creators</TabsTrigger>
-          <TabsTrigger value="pages">Pages</TabsTrigger>
+          <TabsTrigger value="creators">Criadores</TabsTrigger>
+          <TabsTrigger value="pages">Páginas</TabsTrigger>
         </TabsList>
 
         <Card className="bg-gradient-card border-border">
@@ -442,7 +442,7 @@ export default function CreatorsAdmin() {
                   className="pl-9"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search by name, email, handle, or user id..."
+                  placeholder="Buscar por nome, e-mail, perfil ou ID do usuário..."
                 />
               </div>
 
@@ -453,7 +453,7 @@ export default function CreatorsAdmin() {
                   disabled={filteredCreators.length === 0}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Export CSV
+                  Exportar CSV
                 </Button>
               </TabsContent>
 
@@ -464,7 +464,7 @@ export default function CreatorsAdmin() {
                   disabled={filteredPages.length === 0}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Export CSV
+                  Exportar CSV
                 </Button>
               </TabsContent>
             </div>
@@ -473,14 +473,14 @@ export default function CreatorsAdmin() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email / ID</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Pages</TableHead>
-                    <TableHead className="text-right">Submissions</TableHead>
-                    <TableHead className="text-right">Views</TableHead>
-                    <TableHead className="text-right">Earned</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>E-mail / ID</TableHead>
+                    <TableHead>Função</TableHead>
+                    <TableHead className="text-right">Páginas</TableHead>
+                    <TableHead className="text-right">Envios</TableHead>
+                    <TableHead className="text-right">Visualizações</TableHead>
+                    <TableHead className="text-right">Ganhos</TableHead>
+                    <TableHead>Criado em</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -491,7 +491,7 @@ export default function CreatorsAdmin() {
                         colSpan={8}
                         className="text-center text-muted-foreground py-8"
                       >
-                        No creators found
+                        Nenhum criador encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -499,7 +499,7 @@ export default function CreatorsAdmin() {
                       <TableRow key={creator.id}>
                         <TableCell>
                           <div className="font-medium">
-                            {creator.name || "Unknown creator"}
+                            {creator.name || "Criador desconhecido"}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {creator.fallback_pages?.[0]?.handle || ""}
@@ -507,7 +507,7 @@ export default function CreatorsAdmin() {
                         </TableCell>
 
                         <TableCell>
-                          <div>{creator.email || "No email"}</div>
+                          <div>{creator.email || "Sem e-mail"}</div>
                           <div className="text-xs text-muted-foreground max-w-[260px] truncate">
                             {creator.id}
                           </div>
@@ -515,7 +515,7 @@ export default function CreatorsAdmin() {
 
                         <TableCell>
                           <Badge variant={creator.role === "admin" ? "default" : "secondary"}>
-                            {creator.role || "creator"}
+                            {creator.role === "admin" ? "Administrador" : "Criador"}
                           </Badge>
                         </TableCell>
 
@@ -549,14 +549,14 @@ export default function CreatorsAdmin() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Page</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Platform</TableHead>
-                    <TableHead className="text-right">Followers</TableHead>
+                    <TableHead>Página</TableHead>
+                    <TableHead>Responsável</TableHead>
+                    <TableHead>Plataforma</TableHead>
+                    <TableHead className="text-right">Seguidores</TableHead>
                     <TableHead>Tags</TableHead>
-                    <TableHead>Verified</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Verificação</TableHead>
+                    <TableHead>Criado em</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -567,7 +567,7 @@ export default function CreatorsAdmin() {
                         colSpan={8}
                         className="text-center text-muted-foreground py-8"
                       >
-                        No pages found
+                        Nenhuma página encontrada
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -578,7 +578,7 @@ export default function CreatorsAdmin() {
                         <TableRow key={page.id}>
                           <TableCell>
                             <div className="font-medium">
-                              {page.handle || "No handle"}
+                              {page.handle || "Sem perfil"}
                             </div>
                             {page.url && (
                               <a
@@ -587,7 +587,7 @@ export default function CreatorsAdmin() {
                                 rel="noreferrer"
                                 className="text-xs text-primary"
                               >
-                                Open page
+                                Abrir página
                               </a>
                             )}
                           </TableCell>
@@ -616,7 +616,7 @@ export default function CreatorsAdmin() {
                                 ))
                               ) : (
                                 <span className="text-xs text-muted-foreground">
-                                  None
+                                  Nenhuma
                                 </span>
                               )}
                               {tags.length > 3 && (
@@ -629,10 +629,10 @@ export default function CreatorsAdmin() {
                             {page.verified ? (
                               <Badge>
                                 <CheckCircle className="h-3 w-3 mr-1" />
-                                Verified
+                                Verificada
                               </Badge>
                             ) : (
-                              <Badge variant="secondary">Unverified</Badge>
+                              <Badge variant="secondary">Não verificada</Badge>
                             )}
                           </TableCell>
 
@@ -648,7 +648,7 @@ export default function CreatorsAdmin() {
                               }
                             >
                               <Shield className="h-4 w-4 mr-2" />
-                              {page.verified ? "Unverify" : "Verify"}
+                              {page.verified ? "Remover verificação" : "Verificar"}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -664,4 +664,3 @@ export default function CreatorsAdmin() {
     </div>
   );
 }
-

@@ -93,7 +93,7 @@ export default function ErrorsAdmin() {
       setErrors(enrichedErrors);
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: 'Erro',
         description: error.message,
         variant: 'destructive',
       });
@@ -138,15 +138,15 @@ export default function ErrorsAdmin() {
       if (error) throw error;
 
       toast({
-        title: 'Success',
-        description: `Error marked as ${!currentResolved ? 'resolved' : 'unresolved'}`,
+        title: 'Sucesso',
+        description: `Erro marcado como ${!currentResolved ? 'resolvido' : 'não resolvido'}`,
       });
 
       fetchErrors();
       fetchStats();
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: 'Erro',
         description: error.message,
         variant: 'destructive',
       });
@@ -155,14 +155,14 @@ export default function ErrorsAdmin() {
 
   const exportCSV = () => {
     const csv = [
-      ['Error Code', 'Message', 'Severity', 'Page URL', 'User Email', 'Resolved', 'Created At'],
+      ['Código do erro', 'Mensagem', 'Gravidade', 'URL da página', 'E-mail do usuário', 'Resolvido', 'Criado em'],
       ...errors.map(e => [
         e.error_code,
         e.error_message,
-        e.severity,
+        severityLabels[e.severity] || e.severity,
         e.page_url || 'N/A',
-        e.user_email || 'Anonymous',
-        e.resolved ? 'Yes' : 'No',
+        e.user_email || 'Anônimo',
+        e.resolved ? 'Sim' : 'Não',
         new Date(e.created_at).toLocaleString('pt-BR'),
       ]),
     ].map(row => row.join(',')).join('\n');
@@ -186,17 +186,24 @@ export default function ErrorsAdmin() {
     }
   };
 
+  const severityLabels: Record<string, string> = {
+    critical: 'Crítico',
+    error: 'Erro',
+    warning: 'Aviso',
+    info: 'Informação',
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-4xl font-bold mb-2">Error Tracking</h1>
-        <p className="text-muted-foreground">Monitor and manage application errors</p>
+        <h1 className="text-4xl font-bold mb-2">Monitoramento de erros</h1>
+        <p className="text-muted-foreground">Monitore e gerencie os erros da aplicação</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Errors</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de erros</CardTitle>
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -206,7 +213,7 @@ export default function ErrorsAdmin() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Week</CardTitle>
+            <CardTitle className="text-sm font-medium">Últimos 7 dias</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -216,7 +223,7 @@ export default function ErrorsAdmin() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Critical</CardTitle>
+            <CardTitle className="text-sm font-medium">Críticos</CardTitle>
             <AlertCircle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
@@ -226,7 +233,7 @@ export default function ErrorsAdmin() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resolved</CardTitle>
+            <CardTitle className="text-sm font-medium">Resolvidos</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -241,7 +248,7 @@ export default function ErrorsAdmin() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search errors..."
+                placeholder="Buscar erros..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -250,14 +257,14 @@ export default function ErrorsAdmin() {
             
             <Select value={severityFilter} onValueChange={setSeverityFilter}>
               <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Severity" />
+                <SelectValue placeholder="Gravidade" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Severities</SelectItem>
-                <SelectItem value="critical">Critical</SelectItem>
-                <SelectItem value="error">Error</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="all">Todas as gravidades</SelectItem>
+                <SelectItem value="critical">Crítico</SelectItem>
+                <SelectItem value="error">Erro</SelectItem>
+                <SelectItem value="warning">Aviso</SelectItem>
+                <SelectItem value="info">Informação</SelectItem>
               </SelectContent>
             </Select>
 
@@ -266,15 +273,15 @@ export default function ErrorsAdmin() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="false">Unresolved</SelectItem>
-                <SelectItem value="true">Resolved</SelectItem>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="false">Não resolvido</SelectItem>
+                <SelectItem value="true">Resolvido</SelectItem>
               </SelectContent>
             </Select>
 
             <Button variant="outline" onClick={exportCSV} disabled={errors.length === 0}>
               <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              Exportar CSV
             </Button>
           </div>
         </CardHeader>
@@ -283,27 +290,27 @@ export default function ErrorsAdmin() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Error Code</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Page</TableHead>
-                  <TableHead>Time</TableHead>
+                  <TableHead>Código do erro</TableHead>
+                  <TableHead>Mensagem</TableHead>
+                  <TableHead>Gravidade</TableHead>
+                  <TableHead>Usuário</TableHead>
+                  <TableHead>Página</TableHead>
+                  <TableHead>Horário</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
-                      Loading...
+                      Carregando...
                     </TableCell>
                   </TableRow>
                 ) : errors.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      No errors found
+                      Nenhum erro encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -313,11 +320,11 @@ export default function ErrorsAdmin() {
                       <TableCell className="max-w-xs truncate">{error.error_message}</TableCell>
                       <TableCell>
                         <Badge variant={getSeverityColor(error.severity)}>
-                          {error.severity}
+                          {severityLabels[error.severity] || error.severity}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {error.user_email || 'Anonymous'}
+                        {error.user_email || 'Anônimo'}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
                         {error.page_url || 'N/A'}
@@ -343,7 +350,7 @@ export default function ErrorsAdmin() {
                           size="sm"
                           onClick={() => toggleResolved(error.id, error.resolved)}
                         >
-                          {error.resolved ? 'Unresolve' : 'Resolve'}
+                          {error.resolved ? 'Marcar como não resolvido' : 'Marcar como resolvido'}
                         </Button>
                       </TableCell>
                     </TableRow>

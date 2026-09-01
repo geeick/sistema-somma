@@ -89,12 +89,12 @@ export default function TagsAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
-      toast.success('Tag created successfully');
+      toast.success('Tag criada com sucesso');
       setIsCreateOpen(false);
       resetForm();
     },
     onError: () => {
-      toast.error('Failed to create tag');
+      toast.error('Não foi possível criar a tag');
     },
   });
 
@@ -105,12 +105,12 @@ export default function TagsAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
-      toast.success('Tag updated successfully');
+      toast.success('Tag atualizada com sucesso');
       setEditingTag(null);
       resetForm();
     },
     onError: () => {
-      toast.error('Failed to update tag');
+      toast.error('Não foi possível atualizar a tag');
     },
   });
 
@@ -121,10 +121,10 @@ export default function TagsAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
-      toast.success('Tag deleted successfully');
+      toast.success('Tag excluída com sucesso');
     },
     onError: () => {
-      toast.error('Failed to delete tag');
+      toast.error('Não foi possível excluir a tag');
     },
   });
 
@@ -255,7 +255,7 @@ export default function TagsAdmin() {
                     id="synonyms"
                     value={formData.synonyms}
                     onChange={(e) => setFormData({ ...formData, synonyms: e.target.value })}
-                    placeholder="tech, software, digital"
+                    placeholder="tecnologia, software, digital"
                   />
                 </div>
               </div>
@@ -277,20 +277,20 @@ export default function TagsAdmin() {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Tags</CardTitle>
+          <CardTitle>Todas as tags</CardTitle>
           <CardDescription>
-            Manage your content taxonomy and organization
+            Gerencie a classificação e a organização do conteúdo
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead>Nome</TableHead>
                 <TableHead>Slug</TableHead>
-                <TableHead>Synonyms</TableHead>
+                <TableHead>Sinônimos</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -317,7 +317,7 @@ export default function TagsAdmin() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={tag.active ? 'default' : 'secondary'}>
-                        {tag.active ? 'Active' : 'Inactive'}
+                        {tag.active ? 'Ativa' : 'Inativa'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -326,7 +326,7 @@ export default function TagsAdmin() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleViewPages(tag)}
-                          title="View pages with this tag"
+                          title="Ver páginas com esta tag"
                         >
                           <Users className="h-4 w-4" />
                         </Button>
@@ -341,7 +341,7 @@ export default function TagsAdmin() {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
-                            if (confirm('Are you sure you want to delete this tag?')) {
+                            if (confirm('Tem certeza de que deseja excluir esta tag?')) {
                               deleteMutation.mutate(tag.id);
                             }
                           }}
@@ -355,7 +355,7 @@ export default function TagsAdmin() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No tags found. Create your first tag to get started.
+                    Nenhuma tag encontrada. Crie a primeira tag para começar.
                   </TableCell>
                 </TableRow>
               )}
@@ -379,7 +379,7 @@ export default function TagsAdmin() {
                 onClick={() => {
                   if (!tagPages || tagPages.length === 0) return;
                   const csv = [
-                    ['Handle', 'Plataforma', 'Criador', 'Seguidores', 'Visualizações Médias', 'URL'],
+                    ['Perfil', 'Plataforma', 'Criador', 'Seguidores', 'Visualizações médias', 'URL'],
                     ...tagPages.map(page => [
                       page.handle,
                       page.platform.replace('_', ' '),
@@ -423,7 +423,7 @@ export default function TagsAdmin() {
                         <div>
                           <CardTitle className="text-lg">{page.handle}</CardTitle>
                           <CardDescription>
-                            {page.profiles?.full_name || page.profiles?.username || 'Unknown Creator'}
+                            {page.profiles?.full_name || page.profiles?.username || 'Criador desconhecido'}
                           </CardDescription>
                         </div>
                         <Badge variant="outline" className="capitalize">
@@ -435,13 +435,13 @@ export default function TagsAdmin() {
                       <div className="space-y-2">
                         {page.follower_count !== null && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Followers</span>
+                            <span className="text-muted-foreground">Seguidores</span>
                             <span className="font-medium">{page.follower_count.toLocaleString()}</span>
                           </div>
                         )}
                         {page.average_views !== null && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Avg Views</span>
+                            <span className="text-muted-foreground">Média de visualizações</span>
                             <span className="font-medium">{page.average_views.toLocaleString()}</span>
                           </div>
                         )}
@@ -452,7 +452,7 @@ export default function TagsAdmin() {
                             rel="noopener noreferrer"
                             className="text-primary hover:underline flex items-center gap-1 text-sm"
                           >
-                            View Page <ExternalLink className="h-3 w-3" />
+                            Abrir página <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
                       </div>
@@ -462,7 +462,7 @@ export default function TagsAdmin() {
               </div>
             ) : (
               <p className="text-center text-muted-foreground py-8">
-                No pages found with this tag
+                Nenhuma página encontrada com esta tag
               </p>
             )}
           </div>
