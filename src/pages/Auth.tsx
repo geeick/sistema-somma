@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
-import { ArrowLeft, CheckCircle2, MailCheck, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, MailCheck, RefreshCw, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -50,7 +50,7 @@ async function getPostAuthRedirect(tokenFromAuth?: string | null) {
 
 function getAuthErrorDetails(result: any) {
   const error = result?.error || result?.data?.error || null;
-  const status = Number(error?.status || error?.statusCode || error?.code === "EMAIL_NOT_VERIFIED" ? 403 : 0);
+  const status = Number(error?.status || error?.statusCode || (error?.code === "EMAIL_NOT_VERIFIED" ? 403 : 0));
   const code = String(error?.code || error?.body?.code || "").toUpperCase();
   const message = String(error?.message || error?.body?.message || "");
 
@@ -71,19 +71,15 @@ const Auth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
   const [verificationSent, setVerificationSent] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("verified") === "1") {
-      toast.success("E-mail verificado com sucesso. Agora você já pode entrar.");
-      window.history.replaceState({}, "", "/auth");
-    }
-
     let isMounted = true;
 
     getNeonUser()
@@ -104,8 +100,68 @@ const Auth = () => {
 
   const showVerificationScreen = (targetEmail: string, sent = true) => {
     setVerificationEmail(targetEmail);
+    setVerificationCode("");
     setVerificationSent(sent);
-    setPassword("");
+  };
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationEmail) return;
+
+    const otp = verificationCode.replace(/\D/g, "").slice(0, 6);
+    if (otp.length !== 6) {
+      toast.error("Digite o código de 6 dígitos enviado por e-mail.");
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const emailOtp = (authClient as any).emailOtp;
+      if (!emailOtp?.verifyEmail) {
+        throw new Error("A verificação por código não está disponível neste cliente de autenticação.");
+      }
+
+      const result: any = await emailOtp.verifyEmail({
+        email: verificationEmail,
+        otp,
+      });
+
+      if (result?.error) {
+        throw new Error(result.error.message || "Código inválido ou expirado.");
+      }
+
+      toast.success("E-mail verificado com sucesso.");
+
+      // If the password is still available from this signup/sign-in attempt,
+      // sign the user in immediately after successful verification.
+      if (password) {
+        const signInResult: any = await authClient.signIn.email({
+          email: verificationEmail,
+          password,
+        });
+
+        if (!signInResult?.error) {
+          const token = signInResult?.data?.session?.access_token ?? signInResult?.access_token ?? signInResult?.data?.access_token;
+          if (token) {
+            try { setAccessToken(token); } catch {}
+          }
+          const redirectTo = await getPostAuthRedirect(token);
+          navigate(redirectTo, { replace: true });
+          return;
+        }
+      }
+
+      setEmail(verificationEmail);
+      setVerificationEmail(null);
+      setVerificationCode("");
+      setPassword("");
+      toast.message("Agora você já pode entrar na sua conta.");
+    } catch (error: any) {
+      console.error("Falha ao verificar e-mail", error);
+      toast.error(error?.message || "Código inválido ou expirado. Tente novamente.");
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleResendVerification = async () => {
@@ -113,21 +169,26 @@ const Auth = () => {
 
     setIsResending(true);
     try {
-      const callbackURL = `${window.location.origin}/auth?verified=1`;
-      const result: any = await (authClient as any).sendVerificationEmail({
+      const emailOtp = (authClient as any).emailOtp;
+      if (!emailOtp?.sendVerificationOtp) {
+        throw new Error("O reenvio por código não está disponível neste cliente de autenticação.");
+      }
+
+      const result: any = await emailOtp.sendVerificationOtp({
         email: verificationEmail,
-        callbackURL,
+        type: "email-verification",
       });
 
       if (result?.error) {
-        throw new Error(result.error.message || "Não foi possível reenviar o e-mail de verificação.");
+        throw new Error(result.error.message || "Não foi possível reenviar o código.");
       }
 
+      setVerificationCode("");
       setVerificationSent(true);
-      toast.success("E-mail de verificação reenviado.");
+      toast.success("Novo código enviado. Ele expira em 10 minutos.");
     } catch (error: any) {
-      console.error("Falha ao reenviar e-mail de verificação", error);
-      toast.error(error?.message || "Não foi possível reenviar o e-mail de verificação.");
+      console.error("Falha ao reenviar código de verificação", error);
+      toast.error(error?.message || "Não foi possível reenviar o código de verificação.");
     } finally {
       setIsResending(false);
     }
@@ -157,12 +218,9 @@ const Auth = () => {
 
       const token = result?.data?.session?.access_token ?? result?.access_token ?? result?.data?.access_token;
 
-      // When email verification is required, Better Auth creates the account
-      // without issuing a session token. In that case we intentionally stop here
-      // and ask the user to verify their email before entering Somma.
       if (!token) {
         showVerificationScreen(validated.email, true);
-        toast.success("Conta criada. Verifique seu e-mail para continuar.");
+        toast.success("Conta criada. Digite o código enviado ao seu e-mail.");
         return;
       }
 
@@ -201,7 +259,7 @@ const Auth = () => {
       if (result?.error) {
         if (isEmailVerificationError(result)) {
           showVerificationScreen(validated.email, true);
-          toast.message("Confirme seu e-mail antes de entrar.");
+          toast.message("Digite o código enviado ao seu e-mail para confirmar sua conta.");
           return;
         }
         toast.error(result.error.message || "Não foi possível entrar");
@@ -253,23 +311,47 @@ const Auth = () => {
                 <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(var(--somma-pink))]/10 text-[hsl(var(--somma-pink))]">
                   <MailCheck className="h-8 w-8" />
                 </div>
-                <CardTitle className="text-3xl font-extrabold">Verifique seu e-mail</CardTitle>
+                <CardTitle className="text-3xl font-extrabold">Confirme seu e-mail</CardTitle>
                 <CardDescription className="text-[0.96rem] leading-relaxed max-w-sm">
-                  Enviamos um link de confirmação para <span className="font-bold text-foreground">{verificationEmail}</span>. Abra o e-mail e clique no link para ativar sua conta.
+                  Enviamos um código de 6 dígitos para <span className="font-bold text-foreground">{verificationEmail}</span>. Digite o código abaixo para ativar sua conta.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 pb-8">
+                <form onSubmit={handleVerifyEmail} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="verification-code">Código de verificação</Label>
+                    <Input
+                      id="verification-code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className="h-14 text-center text-2xl font-extrabold tracking-[0.34em] tabular-nums"
+                      autoFocus
+                    />
+                    <p className="ui-caption text-center">O código expira em 10 minutos.</p>
+                  </div>
+
+                  <Button type="submit" className="w-full rounded-xl font-bold" disabled={isVerifying || verificationCode.length !== 6}>
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    {isVerifying ? "Verificando..." : "Confirmar e-mail"}
+                  </Button>
+                </form>
+
                 <div className="rounded-2xl border border-border bg-background/70 p-4 flex gap-3">
                   <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <p className="font-bold">Depois da confirmação</p>
-                    <p className="ui-caption mt-1">Você será redirecionado de volta para a Somma e poderá entrar normalmente.</p>
+                    <p className="font-bold">Não recebeu?</p>
+                    <p className="ui-caption mt-1">Confira Spam, Promoções e Lixo eletrônico ou solicite um novo código.</p>
                   </div>
                 </div>
 
                 <Button onClick={handleResendVerification} variant="outline" className="w-full rounded-xl font-bold" disabled={isResending}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${isResending ? "animate-spin" : ""}`} />
-                  {isResending ? "Reenviando..." : "Reenviar e-mail"}
+                  {isResending ? "Reenviando..." : "Reenviar código"}
                 </Button>
 
                 <Button
@@ -277,6 +359,7 @@ const Auth = () => {
                   className="w-full rounded-xl"
                   onClick={() => {
                     setVerificationEmail(null);
+                    setVerificationCode("");
                     setVerificationSent(false);
                   }}
                 >
@@ -285,7 +368,7 @@ const Auth = () => {
                 </Button>
 
                 {verificationSent && (
-                  <p className="text-center ui-caption">Não encontrou? Confira também Spam, Promoções e Lixo eletrônico.</p>
+                  <p className="text-center ui-caption">Use apenas o código mais recente recebido por e-mail.</p>
                 )}
               </CardContent>
             </>
