@@ -88,7 +88,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
   const token = await getNeonAccessToken();
 
   if (!token) {
-    throw new Error("No Neon Auth token found. Sign in again.");
+    throw new Error("Token de autenticação não encontrado. Entre novamente.");
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -104,8 +104,8 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     throw new Error(
-      `Backend returned ${res.status}: ${
-        json?.details || json?.error || json?.message || "Unknown error"
+      `O servidor retornou ${res.status}: ${
+        json?.details || json?.error || json?.message || "erro desconhecido"
       }`
     );
   }
@@ -130,10 +130,10 @@ function formatMoney(value: number | string | null | undefined) {
 }
 
 function formatDate(value: string | null | undefined) {
-  if (!value) return "Not set";
+  if (!value) return "Não informado";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
+  if (Number.isNaN(date.getTime())) return "Não informado";
 
   return date.toLocaleDateString("pt-BR");
 }
@@ -159,9 +159,23 @@ function getPlatformIcon(platform: string | null | undefined) {
 }
 
 function normalizePlatform(platform: string | null | undefined) {
-  if (!platform) return "unknown";
+  if (!platform) return "desconhecida";
   return platform.replace("_", " ");
 }
+
+const statusLabels: Record<string, string> = {
+  pending: "Pendente",
+  approved: "Aprovado",
+  rejected: "Rejeitado",
+  paid: "Pago",
+  deleted: "Excluído",
+  unknown: "Desconhecido",
+};
+
+const metricsSourceLabels: Record<string, string> = {
+  scraper: "Coleta automática",
+  manual: "Entrada manual",
+};
 
 export default function SubmissionsAdmin() {
   const { toast } = useToast();
@@ -191,12 +205,12 @@ export default function SubmissionsAdmin() {
       setSubmissions(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error("Failed to load submissions:", err);
-      setError(err.message || "Failed to load submissions");
+      setError(err.message || "Não foi possível carregar os envios");
       setSubmissions([]);
 
       toast({
-        title: "Error",
-        description: "Failed to load submissions",
+        title: "Erro",
+        description: "Não foi possível carregar os envios",
         variant: "destructive",
       });
     } finally {
@@ -274,14 +288,14 @@ export default function SubmissionsAdmin() {
       );
 
       toast({
-        title: "Success",
-        description: "Submission updated",
+        title: "Sucesso",
+        description: "Envio atualizado",
       });
     } catch (err: any) {
       console.error("Failed to update submission:", err);
       toast({
-        title: "Error",
-        description: err.message || "Failed to update submission",
+        title: "Erro",
+        description: err.message || "Não foi possível atualizar o envio",
         variant: "destructive",
       });
     } finally {
@@ -307,16 +321,16 @@ export default function SubmissionsAdmin() {
       );
 
       toast({
-        title: "Success",
-        description: "Metrics synced from scraper",
+        title: "Sucesso",
+        description: "Métricas sincronizadas automaticamente",
       });
     } catch (err: any) {
       console.error("Failed to sync metrics:", err);
       toast({
-        title: "Error",
+        title: "Erro",
         description:
           err.message ||
-          "Failed to sync metrics. Check that the backend scraper route exists.",
+          "Não foi possível sincronizar as métricas. Verifique a rota de coleta automática no servidor.",
         variant: "destructive",
       });
     } finally {
@@ -358,18 +372,18 @@ export default function SubmissionsAdmin() {
       );
 
       toast({
-        title: "Success",
-        description: "Manual metrics saved",
+        title: "Sucesso",
+        description: "Métricas manuais salvas",
       });
 
       setManualMetricsDialog(null);
     } catch (err: any) {
       console.error("Failed to save manual metrics:", err);
       toast({
-        title: "Error",
+        title: "Erro",
         description:
           err.message ||
-          "Failed to save manual metrics. Check that the backend metrics route exists.",
+          "Não foi possível salvar as métricas manuais. Verifique a rota de métricas no servidor.",
         variant: "destructive",
       });
     } finally {
@@ -384,19 +398,19 @@ export default function SubmissionsAdmin() {
   const exportCsv = () => {
     const rows = [
       [
-        "Creator",
+        "Criador",
         "Email",
-        "Username",
-        "Title",
-        "Campaign",
-        "Platform",
-        "Likes",
-        "Views",
-        "Payout",
+        "Nome de usuário",
+        "Título",
+        "Campanha",
+        "Plataforma",
+        "Curtidas",
+        "Visualizações",
+        "Pagamento",
         "Status",
-        "Uploaded",
-        "Post URL",
-        "Metrics Source",
+        "Enviado em",
+        "URL da publicação",
+        "Origem das métricas",
       ],
       ...filteredSubmissions.map((submission) => [
         submission.creator_name ||
@@ -412,10 +426,10 @@ export default function SubmissionsAdmin() {
         String(submission.likes_count || 0),
         String(submission.views_count || 0),
         String(submission.payment_amount || 0),
-        submission.status || "",
+        statusLabels[submission.status || "unknown"] || submission.status || "",
         formatDate(submission.uploaded_at || submission.created_at),
         submission.post_url || "",
-        submission.metrics_source || "",
+        metricsSourceLabels[submission.metrics_source || ""] || submission.metrics_source || "",
       ]),
     ];
 
@@ -432,7 +446,7 @@ export default function SubmissionsAdmin() {
     const a = document.createElement("a");
 
     a.href = url;
-    a.download = `submissions-${new Date().toISOString()}.csv`;
+    a.download = `envios-${new Date().toISOString()}.csv`;
     a.click();
 
     URL.revokeObjectURL(url);
@@ -454,7 +468,7 @@ export default function SubmissionsAdmin() {
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-8 w-8 text-destructive" />
               <div>
-                <CardTitle>Could not load submissions</CardTitle>
+                <CardTitle>Não foi possível carregar os envios</CardTitle>
                 <CardDescription>{error}</CardDescription>
               </div>
             </div>
@@ -463,11 +477,11 @@ export default function SubmissionsAdmin() {
           <CardContent className="space-y-4">
             <Button onClick={loadSubmissions}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try again
+              Tentar novamente
             </Button>
 
             <div className="rounded-lg bg-muted p-4">
-              <p className="font-semibold mb-2">Debug info</p>
+              <p className="font-semibold mb-2">Informações técnicas</p>
               <pre className="text-xs whitespace-pre-wrap overflow-x-auto">
                 {JSON.stringify(rawResponse, null, 2)}
               </pre>
@@ -484,7 +498,7 @@ export default function SubmissionsAdmin() {
         <div>
           <h1 className="text-4xl font-bold mb-2">Submissões de Conteúdo</h1>
           <p className="text-muted-foreground">
-            Review submissions, sync metrics, and approve creator payouts.
+            Revise envios, sincronize métricas e aprove pagamentos aos criadores.
           </p>
         </div>
 
@@ -499,7 +513,7 @@ export default function SubmissionsAdmin() {
 
       <Card className="bg-gradient-card border-border">
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
+          <CardTitle>Filtros</CardTitle>
 
           <div className="flex flex-col gap-4 mt-4 md:flex-row">
             <div className="relative flex-1">
@@ -508,7 +522,7 @@ export default function SubmissionsAdmin() {
                 className="pl-9"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by creator, username, campaign, URL..."
+                placeholder="Buscar por criador, usuário, campanha ou URL..."
               />
             </div>
 
@@ -517,21 +531,21 @@ export default function SubmissionsAdmin() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="deleted">Deleted</SelectItem>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="approved">Aprovado</SelectItem>
+                <SelectItem value="rejected">Rejeitado</SelectItem>
+                <SelectItem value="paid">Pago</SelectItem>
+                <SelectItem value="deleted">Excluído</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={platformFilter} onValueChange={setPlatformFilter}>
               <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Platform" />
+                <SelectValue placeholder="Plataforma" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Platforms</SelectItem>
+                <SelectItem value="all">Todas as plataformas</SelectItem>
                 {platforms.map((platform) => (
                   <SelectItem key={platform} value={platform}>
                     {normalizePlatform(platform)}
@@ -547,16 +561,16 @@ export default function SubmissionsAdmin() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Creator</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead>Platform</TableHead>
-                  <TableHead className="text-right">Likes</TableHead>
-                  <TableHead className="text-right">Views</TableHead>
-                  <TableHead className="text-right">Payout</TableHead>
+                  <TableHead>Criador</TableHead>
+                  <TableHead>Título</TableHead>
+                  <TableHead>Campanha</TableHead>
+                  <TableHead>Plataforma</TableHead>
+                  <TableHead className="text-right">Curtidas</TableHead>
+                  <TableHead className="text-right">Visualizações</TableHead>
+                  <TableHead className="text-right">Pagamento</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Uploaded</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Enviado em</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -567,7 +581,7 @@ export default function SubmissionsAdmin() {
                       colSpan={10}
                       className="text-center text-muted-foreground py-8"
                     >
-                      No submissions found
+                      Nenhum envio encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -578,7 +592,7 @@ export default function SubmissionsAdmin() {
                           {submission.creator_name ||
                             submission.creator_email ||
                             submission.page_handle ||
-                            "Unknown"}
+                            "Desconhecido"}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {submission.username
@@ -589,7 +603,7 @@ export default function SubmissionsAdmin() {
 
                       <TableCell className="max-w-xs">
                         <div className="truncate">
-                          {submission.title || "Untitled submission"}
+                          {submission.title || "Envio sem título"}
                         </div>
                         {submission.post_url && (
                           <a
@@ -598,14 +612,14 @@ export default function SubmissionsAdmin() {
                             rel="noreferrer"
                             className="text-xs text-primary inline-flex items-center gap-1"
                           >
-                            View post
+                            Abrir publicação
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
                       </TableCell>
 
                       <TableCell>
-                        {submission.campaign_title || "No campaign"}
+                        {submission.campaign_title || "Sem campanha"}
                       </TableCell>
 
                       <TableCell>
@@ -629,7 +643,7 @@ export default function SubmissionsAdmin() {
 
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(submission.status)}>
-                          {submission.status || "unknown"}
+                          {statusLabels[submission.status || "unknown"] || submission.status}
                         </Badge>
                       </TableCell>
 
@@ -643,7 +657,7 @@ export default function SubmissionsAdmin() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setViewDialog(submission)}
-                            title="View submission"
+                            title="Ver envio"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -654,7 +668,7 @@ export default function SubmissionsAdmin() {
                             disabled={isUpdatingId === submission.id}
                             onClick={() => syncMetrics(submission.id)}
                           >
-                            Sync Metrics
+                            Sincronizar métricas
                           </Button>
 
                           <Button
@@ -663,7 +677,7 @@ export default function SubmissionsAdmin() {
                             disabled={isUpdatingId === submission.id}
                             onClick={() => openManualMetrics(submission)}
                           >
-                            Manual Metrics
+                            Métricas manuais
                           </Button>
 
                           <Button
@@ -678,7 +692,7 @@ export default function SubmissionsAdmin() {
                             }
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
+                            Aprovar
                           </Button>
 
                           <Button
@@ -692,7 +706,7 @@ export default function SubmissionsAdmin() {
                             }
                           >
                             <XCircle className="h-4 w-4 mr-1" />
-                            Reject
+                            Rejeitar
                           </Button>
 
                           <Button
@@ -706,7 +720,7 @@ export default function SubmissionsAdmin() {
                             }
                           >
                             <DollarSign className="h-4 w-4 mr-1" />
-                            Paid
+                            Marcar como pago
                           </Button>
 
                           <Button
@@ -714,7 +728,7 @@ export default function SubmissionsAdmin() {
                             size="sm"
                             disabled={isUpdatingId === submission.id}
                             onClick={() => softDeleteSubmission(submission)}
-                            title="Mark deleted"
+                            title="Marcar como excluído"
                             className="text-destructive hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -735,15 +749,15 @@ export default function SubmissionsAdmin() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {viewDialog && getPlatformIcon(viewDialog.platform)}
-              {viewDialog?.title || "Submission"}
+              {viewDialog?.title || "Envio"}
             </DialogTitle>
             <DialogDescription>
-              Submitted by{" "}
+              Enviado por{" "}
               {viewDialog?.creator_name ||
                 viewDialog?.creator_email ||
                 viewDialog?.page_handle ||
-                "Unknown"}{" "}
-              on {formatDate(viewDialog?.uploaded_at || viewDialog?.created_at)}
+                "Desconhecido"}{" "}
+              em {formatDate(viewDialog?.uploaded_at || viewDialog?.created_at)}
             </DialogDescription>
           </DialogHeader>
 
@@ -751,7 +765,7 @@ export default function SubmissionsAdmin() {
             {viewDialog?.post_url && (
               <div className="bg-muted rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Post URL</span>
+                  <span className="text-sm font-medium">URL da publicação</span>
                   <Button variant="outline" size="sm" asChild>
                     <a
                       href={viewDialog.post_url}
@@ -759,7 +773,7 @@ export default function SubmissionsAdmin() {
                       rel="noopener noreferrer"
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      Open post
+                      Abrir publicação
                     </a>
                   </Button>
                 </div>
@@ -771,23 +785,23 @@ export default function SubmissionsAdmin() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <span className="text-sm font-medium">Campaign</span>
+                <span className="text-sm font-medium">Campanha</span>
                 <p className="text-sm text-muted-foreground">
                   {viewDialog?.campaign_title || "N/A"}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <span className="text-sm font-medium">Platform</span>
+                <span className="text-sm font-medium">Plataforma</span>
                 <p className="text-sm text-muted-foreground capitalize">
                   {normalizePlatform(viewDialog?.platform)}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <span className="text-sm font-medium">Username</span>
+                <span className="text-sm font-medium">Nome de usuário</span>
                 <p className="text-sm text-muted-foreground">
-                  {viewDialog?.username || "Not synced yet"}
+                  {viewDialog?.username || "Ainda não sincronizado"}
                 </p>
               </div>
 
@@ -795,36 +809,36 @@ export default function SubmissionsAdmin() {
                 <span className="text-sm font-medium">Status</span>
                 <div>
                   <Badge variant={getStatusBadgeVariant(viewDialog?.status)}>
-                    {viewDialog?.status || "unknown"}
+                    {statusLabels[viewDialog?.status || "unknown"] || viewDialog?.status}
                   </Badge>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <span className="text-sm font-medium">Likes</span>
+                <span className="text-sm font-medium">Curtidas</span>
                 <p className="text-sm text-muted-foreground">
                   {formatNumber(viewDialog?.likes_count)}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <span className="text-sm font-medium">Views</span>
+                <span className="text-sm font-medium">Visualizações</span>
                 <p className="text-sm text-muted-foreground">
                   {formatNumber(viewDialog?.views_count)}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <span className="text-sm font-medium">Payout</span>
+                <span className="text-sm font-medium">Pagamento</span>
                 <p className="text-sm text-muted-foreground">
                   {formatMoney(viewDialog?.payment_amount)}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <span className="text-sm font-medium">Metrics Source</span>
+                <span className="text-sm font-medium">Origem das métricas</span>
                 <p className="text-sm text-muted-foreground">
-                  {viewDialog?.metrics_source || "Not synced yet"}
+                  {metricsSourceLabels[viewDialog?.metrics_source || ""] || viewDialog?.metrics_source || "Ainda não sincronizado"}
                 </p>
               </div>
             </div>
@@ -832,7 +846,7 @@ export default function SubmissionsAdmin() {
             {viewDialog?.reason_code && (
               <div className="space-y-1">
                 <span className="text-sm font-medium text-destructive">
-                  Rejection Reason
+                  Motivo da rejeição
                 </span>
                 <p className="text-sm text-muted-foreground">
                   {viewDialog.reason_code}
@@ -843,7 +857,7 @@ export default function SubmissionsAdmin() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewDialog(null)}>
-              Close
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -855,24 +869,24 @@ export default function SubmissionsAdmin() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Manual Metrics</DialogTitle>
+            <DialogTitle>Métricas manuais</DialogTitle>
             <DialogDescription>
-              Enter metrics manually. The backend should calculate payout from plays/views.
+              Informe as métricas manualmente. O servidor calculará o pagamento com base nas reproduções e visualizações.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label>Username</Label>
+              <Label>Nome de usuário</Label>
               <Input
                 value={manualUsername}
                 onChange={(event) => setManualUsername(event.target.value)}
-                placeholder="creator_username"
+                placeholder="nome_do_criador"
               />
             </div>
 
             <div>
-              <Label>Likes</Label>
+              <Label>Curtidas</Label>
               <Input
                 type="number"
                 min="0"
@@ -883,7 +897,7 @@ export default function SubmissionsAdmin() {
             </div>
 
             <div>
-              <Label>Plays / Views</Label>
+              <Label>Reproduções / visualizações</Label>
               <Input
                 type="number"
                 min="0"
@@ -899,7 +913,7 @@ export default function SubmissionsAdmin() {
               variant="outline"
               onClick={() => setManualMetricsDialog(null)}
             >
-              Cancel
+              Cancelar
             </Button>
 
             <Button
@@ -909,7 +923,7 @@ export default function SubmissionsAdmin() {
                 isUpdatingId === manualMetricsDialog.id
               }
             >
-              Save Metrics
+              Salvar métricas
             </Button>
           </DialogFooter>
         </DialogContent>
