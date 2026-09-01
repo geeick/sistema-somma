@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExternalLink, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { normalizeStringList } from "@/lib/normalizeStringList";
 
 interface UploadVideoProps {
   userId?: string;
@@ -25,7 +26,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 const submissionSchema = z.object({
   campaignId: z.string().uuid("Selecione uma campanha"),
   pageId: z.string().min(1, "Selecione uma das suas páginas aprovadas"),
-  postUrl: z.string().trim().url("URL do post inválida").max(500, "A URL precisa ter menos de 500 caracteres"),
+  postUrl: z.string().trim().url("URL da publicação inválida").max(500, "A URL precisa ter menos de 500 caracteres"),
   platform: z.enum(["instagram", "tiktok", "youtube_shorts"]),
   audioUrl: z.string().trim().url("URL do áudio inválida").optional().or(z.literal("")),
   tiktokVideoId: z.string().optional(),
@@ -63,28 +64,6 @@ interface TikTokVideo {
   create_time?: number | string | null;
 }
 
-function normalizeList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string");
-  }
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((item): item is string => typeof item === "string");
-      }
-    } catch {
-      return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-    }
-  }
-
-  return [];
-}
-
 function normalizePlatform(platform?: string | null) {
   const labels: Record<string, string> = {
     instagram: "Instagram",
@@ -113,7 +92,7 @@ function getVideoLabel(video: TikTokVideo) {
 function pageMatchesRequiredTags(page: Page, requiredTags: string[]) {
   if (requiredTags.length === 0) return true;
 
-  const pageTags = normalizeList(page.tags).map((tag) => tag.toLowerCase());
+  const pageTags = normalizeStringList(page.tags).map((tag) => tag.toLowerCase());
   return requiredTags.some((tag) => pageTags.includes(tag.toLowerCase()));
 }
 
@@ -143,8 +122,8 @@ export const UploadVideo = ({
     (fixedCampaignId && fixedCampaign?.id === fixedCampaignId ? (fixedCampaign as Campaign) : null);
 
   const selectedTikTokVideo = tiktokVideos.find((video) => video.id === selectedTikTokVideoId) || null;
-  const selectedCampaignRequiredTags = normalizeList(selectedCampaignData?.required_tags);
-  const selectedCampaignPlatforms = normalizeList(selectedCampaignData?.platforms);
+  const selectedCampaignRequiredTags = normalizeStringList(selectedCampaignData?.required_tags);
+  const selectedCampaignPlatforms = normalizeStringList(selectedCampaignData?.platforms);
 
   const rawApprovedPages = pages.filter((page) => {
     if (!platform) return false;
@@ -158,7 +137,7 @@ export const UploadVideo = ({
   const allowedCampaigns = campaigns.filter((campaign) => {
     if (!platform) return true;
 
-    const allowedPlatforms = normalizeList(campaign.platforms);
+    const allowedPlatforms = normalizeStringList(campaign.platforms);
     return allowedPlatforms.length === 0 || allowedPlatforms.includes(platform);
   });
 
@@ -269,7 +248,7 @@ export const UploadVideo = ({
     if (fixedCampaignId || !platform || !selectedCampaign) return;
 
     const campaign = campaigns.find((item) => item.id === selectedCampaign);
-    const allowedPlatforms = normalizeList(campaign?.platforms);
+    const allowedPlatforms = normalizeStringList(campaign?.platforms);
 
     if (allowedPlatforms.length > 0 && !allowedPlatforms.includes(platform)) {
       setSelectedCampaign("");
@@ -338,7 +317,7 @@ export const UploadVideo = ({
         return;
       }
 
-      const allowedPlatforms = normalizeList(campaign?.platforms);
+      const allowedPlatforms = normalizeStringList(campaign?.platforms);
 
       if (
         allowedPlatforms.length > 0 &&
@@ -616,7 +595,7 @@ export const UploadVideo = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="postUrl">URL do post *</Label>
+              <Label htmlFor="postUrl">URL da publicação *</Label>
               <Input
                 id="postUrl"
                 type="url"

@@ -224,6 +224,12 @@ function shouldSkipElement(element: Element | null) {
   return tag === "script" || tag === "style" || tag === "noscript" || element.closest("[data-no-translate]") !== null;
 }
 
+function replaceDelimitedText(value: string, from: string, to: string) {
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "gu");
+  return value.replace(pattern, to);
+}
+
 function replaceTextNode(node: Text) {
   const parent = node.parentElement;
   if (shouldSkipElement(parent)) return;
@@ -240,9 +246,7 @@ function replaceTextNode(node: Text) {
 
   let updated = original;
   for (const [from, to] of Object.entries(TEXT_REPLACEMENTS)) {
-    if (updated.includes(from)) {
-      updated = updated.split(from).join(to);
-    }
+    updated = replaceDelimitedText(updated, from, to);
   }
   if (updated !== original) node.nodeValue = updated;
 }

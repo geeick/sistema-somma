@@ -136,11 +136,11 @@ const Wallet = () => {
   };
 
   const statusColors: Record<string, string> = {
-    requested: "bg-yellow-500",
-    pending: "bg-yellow-500",
-    approved: "bg-blue-500",
-    paid: "bg-green-500",
-    rejected: "bg-red-500",
+    requested: "border-amber-300 bg-amber-100 text-amber-900",
+    pending: "border-amber-300 bg-amber-100 text-amber-900",
+    approved: "border-blue-300 bg-blue-100 text-blue-900",
+    paid: "border-emerald-300 bg-emerald-100 text-emerald-900",
+    rejected: "border-red-300 bg-red-100 text-red-900",
   };
 
   if (isLoading) {
@@ -207,13 +207,13 @@ const Wallet = () => {
                 ) : (
                   <div className="space-y-3">
                     {withdrawals.map((withdrawal) => (
-                      <div key={withdrawal.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-background/60">
+                      <div key={withdrawal.id} className="flex flex-col items-start gap-3 border border-border rounded-xl bg-background/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-extrabold text-lg">R$ {formatMoney(withdrawal.amount)}</p>
                           <p className="ui-caption">{new Date(withdrawal.requested_at).toLocaleDateString("pt-BR")}</p>
                           {withdrawal.pix_key && <p className="ui-caption">PIX: {withdrawal.pix_key}</p>}
                         </div>
-                        <Badge className={`${statusColors[withdrawal.status] || "bg-muted"} text-white`}>{statusLabels[withdrawal.status] || withdrawal.status}</Badge>
+                        <Badge variant="outline" className={statusColors[withdrawal.status] || "border-border bg-muted text-foreground"}>{statusLabels[withdrawal.status] || withdrawal.status}</Badge>
                       </div>
                     ))}
                   </div>
@@ -225,12 +225,18 @@ const Wallet = () => {
               <Card className="somma-dark-panel rounded-2xl">
                 <CardHeader>
                   <CardTitle className="text-xl font-extrabold text-[#f7ead1]">Solicitar saque</CardTitle>
-                  <CardDescription className="text-[0.92rem] leading-relaxed text-[#f7ead1]/68">Disponível agora: R$ {formatMoney(available)}</CardDescription>
+                  <CardDescription className="text-[0.92rem] leading-relaxed !text-[#e8d9c0]">Saldo disponível para saque</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  <p className="metric-value text-[2rem] text-[#ff9418]">R$ {formatMoney(available)}</p>
                   <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button className="w-full rounded-xl font-bold" disabled={available < 25}>Solicitar saque via PIX</Button>
+                      <Button
+                        className="w-full rounded-xl font-bold disabled:bg-[#6b513b] disabled:text-[#f2e6d2] disabled:opacity-100"
+                        disabled={available < 25}
+                      >
+                        {available < 25 ? "Saldo insuficiente para saque" : "Solicitar saque via PIX"}
+                      </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
@@ -239,20 +245,20 @@ const Wallet = () => {
                       </DialogHeader>
                       <div className="space-y-4">
                         <div>
-                          <Label>Valor (R$)</Label>
-                          <Input type="number" step="0.01" min="25" max={available} placeholder="Mínimo: R$ 25,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                          <Label htmlFor="withdrawal-amount">Valor (R$)</Label>
+                          <Input id="withdrawal-amount" type="number" step="0.01" min="25" max={available} placeholder="Mínimo: R$ 25,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
                           <p className="ui-caption mt-1">Disponível: R$ {formatMoney(available)}. Valor mínimo: R$ 25,00.</p>
                         </div>
                         <div>
-                          <Label>Chave PIX</Label>
-                          <Input placeholder="CPF, e-mail, telefone ou chave aleatória PIX" value={pixKey} onChange={(e) => setPixKey(e.target.value)} />
+                          <Label htmlFor="withdrawal-pix-key">Chave PIX</Label>
+                          <Input id="withdrawal-pix-key" placeholder="CPF, e-mail, telefone ou chave aleatória PIX" value={pixKey} onChange={(e) => setPixKey(e.target.value)} />
                           {profile?.pix_key && <p className="ui-caption mt-1">Chave salva: {profile.pix_key}. Digite uma chave completa para atualizá-la.</p>}
                         </div>
                         <Button onClick={handleRequestWithdrawal} className="w-full" disabled={isSubmitting}>{isSubmitting ? "Enviando..." : "Enviar solicitação"}</Button>
                       </div>
                     </DialogContent>
                   </Dialog>
-                  {available < 25 && <p className="mt-3 text-[0.88rem] leading-relaxed text-[#f7ead1]/60">O saldo mínimo para solicitar um saque é R$ 25,00.</p>}
+                  {available < 25 && <p className="text-[0.88rem] leading-relaxed text-[#e8d9c0]">Você poderá solicitar um saque quando o saldo atingir R$ 25,00.</p>}
                 </CardContent>
               </Card>
 
