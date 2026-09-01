@@ -89,13 +89,6 @@ function getVideoLabel(video: TikTokVideo) {
   );
 }
 
-function pageMatchesRequiredTags(page: Page, requiredTags: string[]) {
-  if (requiredTags.length === 0) return true;
-
-  const pageTags = normalizeStringList(page.tags).map((tag) => tag.toLowerCase());
-  return requiredTags.some((tag) => pageTags.includes(tag.toLowerCase()));
-}
-
 export const UploadVideo = ({
   userId,
   fixedCampaignId,
@@ -125,14 +118,10 @@ export const UploadVideo = ({
   const selectedCampaignRequiredTags = normalizeStringList(selectedCampaignData?.required_tags);
   const selectedCampaignPlatforms = normalizeStringList(selectedCampaignData?.platforms);
 
-  const rawApprovedPages = pages.filter((page) => {
+  const approvedPages = pages.filter((page) => {
     if (!platform) return false;
     return page.platform === platform && page.verified === true;
   });
-
-  const approvedPages = rawApprovedPages.filter((page) =>
-    pageMatchesRequiredTags(page, selectedCampaignRequiredTags)
-  );
 
   const allowedCampaigns = campaigns.filter((campaign) => {
     if (!platform) return true;
@@ -285,11 +274,6 @@ export const UploadVideo = ({
 
     if (!selectedPage || selectedPage.verified !== true) {
       toast.error("Selecione uma das suas páginas aprovadas antes de enviar.");
-      return;
-    }
-
-    if (!pageMatchesRequiredTags(selectedPage, selectedCampaignRequiredTags)) {
-      toast.error("A página selecionada não atende às tags obrigatórias desta campanha.");
       return;
     }
 
@@ -479,7 +463,7 @@ export const UploadVideo = ({
                 <SelectContent>
                   {approvedPages.length === 0 ? (
                     <SelectItem value="_no_pages" disabled>
-                      Nenhuma página aprovada elegível de {normalizePlatform(platform)} foi encontrada
+                      Nenhuma página aprovada de {normalizePlatform(platform)} foi encontrada
                     </SelectItem>
                   ) : (
                     approvedPages.map((page) => (
@@ -492,7 +476,7 @@ export const UploadVideo = ({
               </Select>
               {approvedPages.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Vá para Páginas e conecte/verifique esta plataforma. Se a campanha exige tags, sua página precisa ter pelo menos uma tag correspondente.
+                  Vá para Páginas e conecte/verifique uma conta desta plataforma.
                 </p>
               )}
             </div>
