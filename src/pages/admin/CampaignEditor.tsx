@@ -112,9 +112,10 @@ function normalizeList(value: unknown): string[] {
         return parsed.filter((item): item is string => typeof item === "string");
       }
     } catch {
-      return value
+      const normalizedValue = value.trim().replace(/^\{(.*)\}$/, "$1");
+      return normalizedValue
         .split(",")
-        .map((item) => item.trim())
+        .map((item) => item.trim().replace(/^"|"$/g, ""))
         .filter(Boolean);
     }
   }
@@ -163,7 +164,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
   const token = await getNeonAccessToken();
 
   if (!token) {
-    throw new Error("No Neon Auth token found. Sign in again.");
+    throw new Error("Token de autenticação não encontrado. Entre novamente.");
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -179,8 +180,8 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     throw new Error(
-      `Backend returned ${res.status}: ${
-        json?.error || json?.message || "Unknown error"
+      `O servidor retornou ${res.status}: ${
+        json?.error || json?.message || "erro desconhecido"
       }`
     );
   }
@@ -200,7 +201,7 @@ export default function CampaignEditor() {
   const [error, setError] = useState("");
   const [rawResponse, setRawResponse] = useState<any>(null);
 
-  const titleText = useMemo(() => (isEdit ? "Edit Campaign" : "New Campaign"), [isEdit]);
+  const titleText = useMemo(() => (isEdit ? "Editar campanha" : "Nova campanha"), [isEdit]);
 
   useEffect(() => {
     if (!id) {
@@ -224,7 +225,7 @@ export default function CampaignEditor() {
         setRawResponse(campaign);
 
         if (!campaign) {
-          throw new Error("Campaign not found.");
+          throw new Error("Campanha não encontrada.");
         }
 
         const audioUrls = normalizeObject(campaign.audio_urls);
@@ -270,7 +271,7 @@ export default function CampaignEditor() {
       } catch (err: any) {
         console.error("Failed to load campaign:", err);
         if (!cancelled) {
-          setError(err.message || "Failed to load campaign.");
+          setError(err.message || "Não foi possível carregar a campanha.");
         }
       } finally {
         if (!cancelled) {
@@ -307,13 +308,13 @@ export default function CampaignEditor() {
   };
 
   const validateForm = () => {
-    if (!form.title.trim()) return "Campaign title is required.";
-    if (!form.client.trim()) return "Client is required.";
-    if (!form.artist.trim()) return "Artist is required.";
-    if (!form.budget.trim()) return "Budget is required.";
-    if (!form.start_date) return "Start date is required.";
-    if (!form.end_date) return "End date is required.";
-    if (!form.brief.trim()) return "Creative brief is required.";
+    if (!form.title.trim()) return "O título da campanha é obrigatório.";
+    if (!form.client.trim()) return "O cliente é obrigatório.";
+    if (!form.artist.trim()) return "O artista é obrigatório.";
+    if (!form.budget.trim()) return "O orçamento é obrigatório.";
+    if (!form.start_date) return "A data de início é obrigatória.";
+    if (!form.end_date) return "A data de término é obrigatória.";
+    if (!form.brief.trim()) return "O briefing criativo é obrigatório.";
 
     const hasAudio =
       form.audio_url.trim() ||
@@ -322,7 +323,7 @@ export default function CampaignEditor() {
       form.audio_youtube_shorts.trim();
 
     if (!hasAudio) {
-      return "At least one campaign audio link is required.";
+      return "É necessário informar pelo menos um link de áudio da campanha.";
     }
 
     return "";
@@ -335,7 +336,7 @@ export default function CampaignEditor() {
 
     if (validationError) {
       toast({
-        title: "Missing information",
+        title: "Informações obrigatórias",
         description: validationError,
         variant: "destructive",
       });
@@ -389,16 +390,16 @@ export default function CampaignEditor() {
       }
 
       toast({
-        title: "Success",
-        description: isEdit ? "Campaign updated." : "Campaign created.",
+        title: "Sucesso",
+        description: isEdit ? "Campanha atualizada." : "Campanha criada.",
       });
 
       navigate("/admin/campaigns");
     } catch (err: any) {
       console.error("Failed to save campaign:", err);
       toast({
-        title: "Error",
-        description: err.message || "Failed to save campaign.",
+        title: "Erro",
+        description: err.message || "Não foi possível salvar a campanha.",
         variant: "destructive",
       });
     } finally {
@@ -412,14 +413,14 @@ export default function CampaignEditor() {
         <Button variant="ghost" asChild>
           <Link to="/admin/campaigns">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Campaigns
+            Voltar para campanhas
           </Link>
         </Button>
 
         <Card className="bg-gradient-card border-border">
           <CardHeader>
             <CardTitle>{titleText}</CardTitle>
-            <CardDescription>Loading campaign information...</CardDescription>
+            <CardDescription>Carregando informações da campanha...</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -432,7 +433,7 @@ export default function CampaignEditor() {
         <Button variant="ghost" asChild>
           <Link to="/admin/campaigns">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Campaigns
+            Voltar para campanhas
           </Link>
         </Button>
 
@@ -441,7 +442,7 @@ export default function CampaignEditor() {
             <div className="flex gap-3">
               <AlertTriangle className="h-8 w-8 text-destructive" />
               <div>
-                <CardTitle>Could not load campaign</CardTitle>
+                <CardTitle>Não foi possível carregar a campanha</CardTitle>
                 <CardDescription>{error}</CardDescription>
               </div>
             </div>
@@ -462,7 +463,7 @@ export default function CampaignEditor() {
       <Button variant="ghost" asChild>
         <Link to="/admin/campaigns">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Campaigns
+          Voltar para campanhas
         </Link>
       </Button>
 
@@ -471,8 +472,8 @@ export default function CampaignEditor() {
           <CardTitle>{titleText}</CardTitle>
           <CardDescription>
             {isEdit
-              ? "Update campaign information below."
-              : "Create a new campaign below."}
+              ? "Atualize as informações da campanha abaixo."
+              : "Preencha as informações para criar uma campanha."}
           </CardDescription>
         </CardHeader>
 
@@ -480,12 +481,12 @@ export default function CampaignEditor() {
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="title">Campaign Title *</Label>
+                <Label htmlFor="title">Título da campanha *</Label>
                 <Input
                   id="title"
                   value={form.title}
                   onChange={(event) => updateField("title", event.target.value)}
-                  placeholder="Summer Push"
+                  placeholder="Campanha de Verão"
                 />
               </div>
 
@@ -503,22 +504,22 @@ export default function CampaignEditor() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="client">Client *</Label>
+                <Label htmlFor="client">Cliente *</Label>
                 <Input
                   id="client"
                   value={form.client}
                   onChange={(event) => updateField("client", event.target.value)}
-                  placeholder="Brand or client name"
+                  placeholder="Nome da marca ou do cliente"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="artist">Artist *</Label>
+                <Label htmlFor="artist">Artista *</Label>
                 <Input
                   id="artist"
                   value={form.artist}
                   onChange={(event) => updateField("artist", event.target.value)}
-                  placeholder="Artist name"
+                  placeholder="Nome do artista"
                 />
               </div>
 
@@ -529,19 +530,19 @@ export default function CampaignEditor() {
                   onValueChange={(value) => updateField("status", value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose status" />
+                    <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                    <SelectItem value="draft">Rascunho</SelectItem>
+                    <SelectItem value="active">Ativa</SelectItem>
+                    <SelectItem value="closed">Encerrada</SelectItem>
+                    <SelectItem value="archived">Arquivada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="budget">Budget (R$) *</Label>
+                <Label htmlFor="budget">Orçamento (R$) *</Label>
                 <Input
                   id="budget"
                   type="number"
@@ -554,7 +555,7 @@ export default function CampaignEditor() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="start_date">Start Date *</Label>
+                <Label htmlFor="start_date">Data de início *</Label>
                 <Input
                   id="start_date"
                   type="date"
@@ -566,7 +567,7 @@ export default function CampaignEditor() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="end_date">End Date *</Label>
+                <Label htmlFor="end_date">Data de término *</Label>
                 <Input
                   id="end_date"
                   type="date"
@@ -577,7 +578,7 @@ export default function CampaignEditor() {
 
               <div className="space-y-2">
                 <Label htmlFor="min_posts_per_creator">
-                  Min Posts per Creator
+                  Mínimo de publicações por criador
                 </Label>
                 <Input
                   id="min_posts_per_creator"
@@ -592,7 +593,7 @@ export default function CampaignEditor() {
 
               <div className="space-y-2">
                 <Label htmlFor="max_posts_per_creator">
-                  Max Posts per Creator
+                  Máximo de publicações por criador
                 </Label>
                 <Input
                   id="max_posts_per_creator"
@@ -607,18 +608,18 @@ export default function CampaignEditor() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="brief">Creative Brief *</Label>
+              <Label htmlFor="brief">Briefing criativo *</Label>
               <Textarea
                 id="brief"
                 rows={6}
                 value={form.brief}
                 onChange={(event) => updateField("brief", event.target.value)}
-                placeholder="Explain what creators should make."
+                placeholder="Explique o que os criadores devem produzir."
               />
             </div>
 
             <div className="space-y-3">
-              <Label>Platforms</Label>
+              <Label>Plataformas</Label>
               <div className="grid gap-3 md:grid-cols-3">
                 {platformOptions.map((platform) => (
                   <Label
@@ -636,17 +637,17 @@ export default function CampaignEditor() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="required_tags">Required Tags</Label>
+              <Label htmlFor="required_tags">Tags obrigatórias</Label>
               <Input
                 id="required_tags"
                 value={form.required_tags}
                 onChange={(event) =>
                   updateField("required_tags", event.target.value)
                 }
-                placeholder="fashion, music, dance"
+                placeholder="moda, música, dança"
               />
               <p className="text-xs text-muted-foreground">
-                Separate tags with commas. Leave blank for open campaigns.
+                Separe as tags por vírgulas. Deixe em branco para campanhas livres.
               </p>
             </div>
 
@@ -660,7 +661,7 @@ export default function CampaignEditor() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="audio_url">General Audio URL</Label>
+                  <Label htmlFor="audio_url">Link geral do áudio</Label>
                   <Input
                     id="audio_url"
                     type="url"
@@ -673,7 +674,7 @@ export default function CampaignEditor() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="audio_tiktok">TikTok Audio URL</Label>
+                  <Label htmlFor="audio_tiktok">Link do áudio no TikTok</Label>
                   <Input
                     id="audio_tiktok"
                     type="url"
@@ -686,7 +687,7 @@ export default function CampaignEditor() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="audio_instagram">Instagram Audio URL</Label>
+                  <Label htmlFor="audio_instagram">Link do áudio no Instagram</Label>
                   <Input
                     id="audio_instagram"
                     type="url"
@@ -700,7 +701,7 @@ export default function CampaignEditor() {
 
                 <div className="space-y-2">
                   <Label htmlFor="audio_youtube_shorts">
-                    YouTube Shorts Audio URL
+                    Link do áudio no YouTube Shorts
                   </Label>
                   <Input
                     id="audio_youtube_shorts"
@@ -717,9 +718,9 @@ export default function CampaignEditor() {
 
             <div className="space-y-4">
               <div>
-                <Label>Example URLs</Label>
+                <Label>Links de exemplo</Label>
                 <p className="text-sm text-muted-foreground">
-                  Optional reference posts for creators.
+                  Publicações de referência opcionais para os criadores.
                 </p>
               </div>
 
@@ -729,7 +730,7 @@ export default function CampaignEditor() {
 
                   return (
                     <div key={key} className="space-y-2">
-                      <Label htmlFor={key}>Example {num}</Label>
+                      <Label htmlFor={key}>Exemplo {num}</Label>
                       <Input
                         id={key}
                         type="url"
@@ -747,7 +748,7 @@ export default function CampaignEditor() {
 
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" asChild>
-                <Link to="/admin/campaigns">Cancel</Link>
+                <Link to="/admin/campaigns">Cancelar</Link>
               </Button>
 
               <Button type="submit" disabled={isSaving}>
@@ -756,7 +757,7 @@ export default function CampaignEditor() {
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                {isEdit ? "Update Campaign" : "Create Campaign"}
+                {isEdit ? "Atualizar campanha" : "Criar campanha"}
               </Button>
             </div>
           </form>
