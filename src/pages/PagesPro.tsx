@@ -10,7 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Instagram, Play, Youtube, Plus, Trash2, ExternalLink, ShieldCheck, ShieldAlert, Sparkles, UsersRound } from "lucide-react";
+import {
+  Instagram,
+  Play,
+  Youtube,
+  Plus,
+  Trash2,
+  ExternalLink,
+  ShieldCheck,
+  ShieldAlert,
+  Sparkles,
+  UsersRound,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface Page {
@@ -25,7 +36,21 @@ interface Page {
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
-const availableTags = ["Funk", "Rap/Trap", "Pop", "Sertanejo", "Forró", "Piseiro", "Arrocha", "Gospel", "Internacional", "Fofoca", "Influencer", "Edição", "Letras"];
+const availableTags = [
+  "Funk",
+  "Rap/Trap",
+  "Pop",
+  "Sertanejo",
+  "Forró",
+  "Piseiro",
+  "Arrocha",
+  "Gospel",
+  "Internacional",
+  "Fofoca",
+  "Influencer",
+  "Edição",
+  "Letras",
+];
 
 const platformIcons: Record<string, LucideIcon> = {
   instagram: Instagram,
@@ -41,14 +66,21 @@ const platformLabels: Record<string, string> = {
 
 function normalizeTags(value: Page["tags"]): string[] {
   if (Array.isArray(value)) return value;
+
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.filter((tag): tag is string => typeof tag === "string");
+      if (Array.isArray(parsed)) {
+        return parsed.filter((tag): tag is string => typeof tag === "string");
+      }
     } catch {
-      return value.split(",").map((tag) => tag.trim()).filter(Boolean);
+      return value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
     }
   }
+
   return [];
 }
 
@@ -78,7 +110,11 @@ const PagesPro = () => {
       setPages(data || []);
     } catch (error) {
       console.error("Erro ao carregar páginas:", error);
-      toast({ title: "Erro", description: "Não foi possível carregar suas páginas.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar suas páginas.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -91,6 +127,7 @@ const PagesPro = () => {
           navigate("/auth");
           return;
         }
+
         setUser(currentUser);
       })
       .catch(() => navigate("/auth"));
@@ -107,29 +144,54 @@ const PagesPro = () => {
     const message = searchParams.get("message");
 
     if (instagramStatus === "connected") {
-      toast({ title: "Instagram conectado", description: "Sua página foi verificada e adicionada." });
+      toast({
+        title: "Instagram conectado",
+        description: "Sua página foi verificada e adicionada.",
+      });
       fetchPages();
       setSearchParams({});
     } else if (instagramStatus === "error" || instagramStatus === "denied") {
-      toast({ title: "Não foi possível conectar o Instagram", description: "Tente conectar novamente.", variant: "destructive" });
+      toast({
+        title: "Não foi possível conectar o Instagram",
+        description: "Tente conectar novamente.",
+        variant: "destructive",
+      });
       setSearchParams({});
     }
 
     if (tiktokStatus === "connected") {
-      toast({ title: "TikTok conectado", description: "Sua página foi verificada e adicionada." });
+      toast({
+        title: "TikTok conectado",
+        description: "Sua página foi verificada e adicionada.",
+      });
       fetchPages();
       setSearchParams({});
     } else if (tiktokStatus === "error" || tiktokStatus === "missing_code") {
-      toast({ title: "Não foi possível conectar o TikTok", description: message || "Tente conectar novamente.", variant: "destructive" });
+      toast({
+        title: "Não foi possível conectar o TikTok",
+        description: message || "Tente conectar novamente.",
+        variant: "destructive",
+      });
       setSearchParams({});
     }
 
     if (youtubeStatus === "connected") {
-      toast({ title: "YouTube conectado", description: "Seu canal foi verificado e adicionado." });
+      toast({
+        title: "YouTube conectado",
+        description: "Seu canal foi verificado e adicionado.",
+      });
       fetchPages();
       setSearchParams({});
-    } else if (youtubeStatus === "error" || youtubeStatus === "denied" || youtubeStatus === "missing_code") {
-      toast({ title: "Não foi possível conectar o YouTube", description: message || "Tente conectar novamente.", variant: "destructive" });
+    } else if (
+      youtubeStatus === "error" ||
+      youtubeStatus === "denied" ||
+      youtubeStatus === "missing_code"
+    ) {
+      toast({
+        title: "Não foi possível conectar o YouTube",
+        description: message || "Tente conectar novamente.",
+        variant: "destructive",
+      });
       setSearchParams({});
     }
   }, [searchParams, setSearchParams]);
@@ -141,40 +203,68 @@ const PagesPro = () => {
   };
 
   const toggleTag = (tag: string) => {
-    setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]);
+    setSelectedTags((current) =>
+      current.includes(tag)
+        ? current.filter((item) => item !== tag)
+        : [...current, tag]
+    );
   };
 
   const requireTags = () => {
     if (selectedTags.length > 0) return true;
-    toast({ title: "Selecione pelo menos uma tag", description: "As tags ajudam a encontrar campanhas compatíveis com sua página.", variant: "destructive" });
+
+    toast({
+      title: "Selecione pelo menos uma tag",
+      description: "Escolha as tags da página antes de conectar sua conta.",
+      variant: "destructive",
+    });
     return false;
   };
 
-  const connectPlatform = async (provider: "instagram" | "tiktok" | "youtube") => {
+  const connectPlatform = async (
+    provider: "instagram" | "tiktok" | "youtube"
+  ) => {
     if (!user || !requireTags()) return;
+
     setIsConnecting(true);
 
     try {
       const token = await getNeonAccessToken();
-      if (!token) throw new Error("Sua sessão expirou. Saia e entre novamente.");
+      if (!token) {
+        throw new Error("Sua sessão expirou. Saia e entre novamente.");
+      }
 
       const endpointPaths = {
         instagram: "/api/integrations/instagram/start",
         tiktok: "/api/integrations/tiktok/auth-url",
         youtube: "/api/integrations/youtube/start",
       };
-      const query = new URLSearchParams({ tags: JSON.stringify(selectedTags) });
+
+      const query = new URLSearchParams({
+        tags: JSON.stringify(selectedTags),
+      });
       const endpoint = `${API_BASE}${endpointPaths[provider]}?${query.toString()}`;
 
-      const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const json = await response.json();
       const oauthUrl = provider === "tiktok" ? json.data?.url : json.url;
 
-      if (!response.ok || !oauthUrl) throw new Error(json.error || json.details || "Não foi possível iniciar a conexão.");
+      if (!response.ok || !oauthUrl) {
+        throw new Error(
+          json.error || json.details || "Não foi possível iniciar a conexão."
+        );
+      }
+
       window.location.href = oauthUrl;
     } catch (error: unknown) {
       setIsConnecting(false);
-      toast({ title: "Falha na conexão", description: getErrorMessage(error), variant: "destructive" });
+      toast({
+        title: "Falha na conexão",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -184,14 +274,20 @@ const PagesPro = () => {
       setPages((current) => current.filter((page) => page.id !== pageId));
       toast({ title: "Página removida" });
     } catch (error: unknown) {
-      toast({ title: "Não foi possível remover a página", description: getErrorMessage(error), variant: "destructive" });
+      toast({
+        title: "Não foi possível remover a página",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
   const tagPicker = (
     <div>
       <Label>Tags da página *</Label>
-      <p className="ui-caption mt-1 mb-3">Escolha os temas que melhor representam o conteúdo desta página.</p>
+      <p className="ui-caption mt-1 mb-3">
+        Escolha os temas que melhor representam o conteúdo desta página.
+      </p>
       <div className="flex flex-wrap gap-2">
         {availableTags.map((tag) => (
           <Badge
@@ -207,12 +303,46 @@ const PagesPro = () => {
     </div>
   );
 
+  const connectionCard = (
+    provider: "instagram" | "tiktok" | "youtube",
+    title: string,
+    description: string,
+    icon: React.ReactNode,
+    iconClassName: string
+  ) => (
+    <button
+      type="button"
+      className="w-full text-left disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={isConnecting}
+      onClick={() => connectPlatform(provider)}
+      aria-label={title}
+    >
+      <Card className="somma-panel rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+        <CardContent className="p-5 flex gap-4 items-start">
+          <div
+            className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${iconClassName}`}
+          >
+            {icon}
+          </div>
+          <div className="flex-1">
+            <p className="font-extrabold">
+              {isConnecting ? "Conectando..." : title}
+            </p>
+            <p className="ui-caption mt-1">{description}</p>
+          </div>
+        </CardContent>
+      </Card>
+    </button>
+  );
+
   if (isLoading) {
     return (
       <div className="min-h-screen somma-shell">
         <Navbar />
         <div className="container mx-auto px-4 pt-28 pb-12">
-          <p className="text-center text-muted-foreground font-semibold">Carregando páginas...</p>
+          <p className="text-center text-muted-foreground font-semibold">
+            Carregando páginas...
+          </p>
         </div>
       </div>
     );
@@ -226,23 +356,38 @@ const PagesPro = () => {
           <section className="app-page-header">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 relative z-10">
               <div>
-                <div className="app-eyebrow"><Sparkles className="h-4 w-4" /> Presença digital</div>
+                <div className="app-eyebrow">
+                  <Sparkles className="h-4 w-4" /> Presença digital
+                </div>
                 <h1 className="app-title">Suas páginas</h1>
-                <p className="app-subtitle">Conecte e organize suas contas sociais para participar de campanhas compatíveis com o seu conteúdo.</p>
+                <p className="app-subtitle">
+                  Conecte e organize suas contas sociais para participar de
+                  campanhas compatíveis com o seu conteúdo.
+                </p>
               </div>
 
-              <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+              <Dialog
+                open={isDialogOpen}
+                onOpenChange={(open) => {
+                  setIsDialogOpen(open);
+                  if (!open) resetForm();
+                }}
+              >
                 <DialogTrigger asChild>
                   <Button className="rounded-xl h-11 px-5 font-extrabold shrink-0">
                     <Plus className="h-4 w-4 mr-2" />
                     Adicionar página
                   </Button>
                 </DialogTrigger>
+
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle className="text-xl font-extrabold">Adicionar página</DialogTitle>
+                    <DialogTitle className="text-xl font-extrabold">
+                      Adicionar página
+                    </DialogTitle>
                     <DialogDescription className="text-[0.93rem] leading-relaxed">
-                      Instagram, TikTok e YouTube são verificados pelo login da própria plataforma.
+                      Instagram, TikTok e YouTube são verificados pelo login da
+                      própria plataforma.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -250,66 +395,55 @@ const PagesPro = () => {
                     <div>
                       <Label>Plataforma *</Label>
                       <Select value={platform} onValueChange={setPlatform}>
-                        <SelectTrigger className="mt-2"><SelectValue placeholder="Selecione a plataforma" /></SelectTrigger>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="Selecione a plataforma" />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="instagram">Instagram</SelectItem>
                           <SelectItem value="tiktok">TikTok</SelectItem>
-                          <SelectItem value="youtube_shorts">YouTube Shorts</SelectItem>
+                          <SelectItem value="youtube_shorts">
+                            YouTube Shorts
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     {platform === "instagram" && (
                       <div className="space-y-5">
-                        <Card className="somma-panel rounded-2xl">
-                          <CardContent className="p-5 flex gap-4 items-start">
-                            <div className="h-11 w-11 rounded-xl bg-pink-50 text-pink-700 flex items-center justify-center shrink-0"><Instagram className="h-5 w-5" /></div>
-                            <div>
-                              <p className="font-extrabold">Verifique sua conta do Instagram</p>
-                              <p className="ui-caption mt-1">Você será direcionado ao Instagram. Depois da autorização, a Somma salva automaticamente seu usuário, URL e status de verificação.</p>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        {connectionCard(
+                          "instagram",
+                          "Verifique sua conta do Instagram",
+                          "Você será direcionado ao Instagram. Depois da autorização, a Somma salva automaticamente seu usuário, URL e status de verificação.",
+                          <Instagram className="h-5 w-5" />,
+                          "bg-pink-50 text-pink-700"
+                        )}
                         {tagPicker}
-                        <Button className="w-full rounded-xl" disabled={isConnecting} onClick={() => connectPlatform("instagram")}>
-                          <Instagram className="h-4 w-4 mr-2" />{isConnecting ? "Conectando..." : "Conectar Instagram"}
-                        </Button>
                       </div>
                     )}
 
                     {platform === "tiktok" && (
                       <div className="space-y-5">
-                        <Card className="somma-panel rounded-2xl">
-                          <CardContent className="p-5 flex gap-4 items-start">
-                            <div className="h-11 w-11 rounded-xl bg-foreground text-background flex items-center justify-center shrink-0"><Play className="h-5 w-5" /></div>
-                            <div>
-                              <p className="font-extrabold">Verifique sua conta do TikTok</p>
-                              <p className="ui-caption mt-1">Você será direcionado ao TikTok para autorizar a Somma. A conta será adicionada como página verificada.</p>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        {connectionCard(
+                          "tiktok",
+                          "Verifique sua conta do TikTok",
+                          "Você será direcionado ao TikTok para autorizar a Somma. Depois da autorização, a conta será adicionada automaticamente como página verificada.",
+                          <Play className="h-5 w-5" />,
+                          "bg-foreground text-background"
+                        )}
                         {tagPicker}
-                        <Button className="w-full rounded-xl" disabled={isConnecting} onClick={() => connectPlatform("tiktok")}>
-                          <Play className="h-4 w-4 mr-2" />{isConnecting ? "Conectando..." : "Conectar TikTok"}
-                        </Button>
                       </div>
                     )}
 
                     {platform === "youtube_shorts" && (
                       <div className="space-y-5">
-                        <Card className="somma-panel rounded-2xl">
-                          <CardContent className="p-5 flex gap-4 items-start">
-                            <div className="h-11 w-11 rounded-xl bg-red-50 text-red-700 flex items-center justify-center shrink-0"><Youtube className="h-5 w-5" /></div>
-                            <div>
-                              <p className="font-extrabold">Verifique seu canal do YouTube</p>
-                              <p className="ui-caption mt-1">Você será direcionado ao Google para escolher a conta. A Somma salvará automaticamente o canal, o link, o número público de inscritos e o status de verificação.</p>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        {connectionCard(
+                          "youtube",
+                          "Verifique seu canal do YouTube",
+                          "Você será direcionado ao Google para escolher a conta. A Somma salvará automaticamente o canal, o link, o número público de inscritos e o status de verificação.",
+                          <Youtube className="h-5 w-5" />,
+                          "bg-red-50 text-red-700"
+                        )}
                         {tagPicker}
-                        <Button className="w-full rounded-xl" disabled={isConnecting} onClick={() => connectPlatform("youtube")}>
-                          <Youtube className="h-4 w-4 mr-2" />{isConnecting ? "Conectando..." : "Conectar YouTube"}
-                        </Button>
                       </div>
                     )}
                   </div>
@@ -323,50 +457,109 @@ const PagesPro = () => {
               <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
                 <UsersRound className="h-6 w-6" />
               </div>
-              <h2 className="text-xl font-extrabold">Você ainda não adicionou nenhuma página</h2>
-              <p className="ui-caption max-w-lg">Adicione sua primeira conta social para descobrir campanhas compatíveis e enviar conteúdo.</p>
-              <Button className="rounded-xl mt-2" onClick={() => setIsDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Adicionar primeira página</Button>
+              <h2 className="text-xl font-extrabold">
+                Você ainda não adicionou nenhuma página
+              </h2>
+              <p className="ui-caption max-w-lg">
+                Adicione sua primeira conta social para descobrir campanhas
+                compatíveis e enviar conteúdo.
+              </p>
+              <Button
+                className="rounded-xl mt-2"
+                onClick={() => setIsDialogOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar primeira página
+              </Button>
             </div>
           ) : (
             <div className="grid md:grid-cols-2 gap-4 page-enter stagger-1">
               {normalizedPages.map((page) => {
                 const Icon = platformIcons[page.platform] || UsersRound;
                 const verified = Boolean(page.verified);
+
                 return (
-                  <Card key={page.id} className="somma-panel somma-card-hover rounded-2xl overflow-hidden">
+                  <Card
+                    key={page.id}
+                    className="somma-panel somma-card-hover rounded-2xl overflow-hidden"
+                  >
                     <CardHeader>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Icon className="h-5 w-5" /></div>
+                          <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <Icon className="h-5 w-5" />
+                          </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <CardTitle className="text-lg font-extrabold truncate">{page.handle}</CardTitle>
-                              <Badge variant={verified ? "default" : "outline"} className="gap-1 rounded-full">
-                                {verified ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                              <CardTitle className="text-lg font-extrabold truncate">
+                                {page.handle}
+                              </CardTitle>
+                              <Badge
+                                variant={verified ? "default" : "outline"}
+                                className="gap-1 rounded-full"
+                              >
+                                {verified ? (
+                                  <ShieldCheck className="h-3 w-3" />
+                                ) : (
+                                  <ShieldAlert className="h-3 w-3" />
+                                )}
                                 {verified ? "Verificada" : "Não verificada"}
                               </Badge>
                             </div>
-                            <CardDescription className="text-[0.9rem]">{platformLabels[page.platform] || page.platform}</CardDescription>
+                            <CardDescription className="text-[0.9rem]">
+                              {platformLabels[page.platform] || page.platform}
+                            </CardDescription>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => deletePage(page.id)} aria-label={`Excluir ${page.handle}`}>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deletePage(page.id)}
+                          aria-label={`Excluir ${page.handle}`}
+                        >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </CardHeader>
+
                     <CardContent className="space-y-4">
                       <div className="flex items-center justify-between gap-3 text-[0.92rem]">
-                        <span className="text-muted-foreground">{page.platform === "youtube_shorts" ? "Inscritos" : "Seguidores"}</span>
-                        <strong>{page.follower_count === null || page.follower_count === undefined ? "Oculto ou indisponível" : Number(page.follower_count).toLocaleString("pt-BR")}</strong>
+                        <span className="text-muted-foreground">
+                          {page.platform === "youtube_shorts"
+                            ? "Inscritos"
+                            : "Seguidores"}
+                        </span>
+                        <strong>
+                          {page.follower_count === null ||
+                          page.follower_count === undefined
+                            ? "Oculto ou indisponível"
+                            : Number(page.follower_count).toLocaleString("pt-BR")}
+                        </strong>
                       </div>
+
                       {page.url && (
-                        <a href={page.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[0.9rem] font-bold text-primary hover:underline">
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[0.9rem] font-bold text-primary hover:underline"
+                        >
                           Abrir perfil <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       )}
+
                       {normalizeTags(page.tags).length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {normalizeTags(page.tags).map((tag) => <Badge key={tag} variant="secondary" className="rounded-full">{tag}</Badge>)}
+                          {normalizeTags(page.tags).map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className="rounded-full"
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
                         </div>
                       )}
                     </CardContent>
