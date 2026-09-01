@@ -5,7 +5,6 @@ import { getNeonAccessToken, getNeonUser, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -53,9 +52,8 @@ function normalizeTags(value: Page["tags"]): string[] {
   return [];
 }
 
-function cleanHandle(value: string) {
-  const cleaned = value.replace(/@/g, "").trim();
-  return cleaned ? `@${cleaned}` : "";
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 const PagesPro = () => {
@@ -67,9 +65,6 @@ const PagesPro = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [platform, setPlatform] = useState("");
-  const [handle, setHandle] = useState("");
-  const [url, setUrl] = useState("");
-  const [followerCount, setFollowerCount] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const normalizedPages = useMemo(
@@ -108,6 +103,7 @@ const PagesPro = () => {
   useEffect(() => {
     const instagramStatus = searchParams.get("instagram");
     const tiktokStatus = searchParams.get("tiktok");
+    const youtubeStatus = searchParams.get("youtube");
     const message = searchParams.get("message");
 
     if (instagramStatus === "connected") {
@@ -127,13 +123,19 @@ const PagesPro = () => {
       toast({ title: "Não foi possível conectar o TikTok", description: message || "Tente conectar novamente.", variant: "destructive" });
       setSearchParams({});
     }
+
+    if (youtubeStatus === "connected") {
+      toast({ title: "YouTube conectado", description: "Seu canal foi verificado e adicionado." });
+      fetchPages();
+      setSearchParams({});
+    } else if (youtubeStatus === "error" || youtubeStatus === "denied" || youtubeStatus === "missing_code") {
+      toast({ title: "Não foi possível conectar o YouTube", description: message || "Tente conectar novamente.", variant: "destructive" });
+      setSearchParams({});
+    }
   }, [searchParams, setSearchParams]);
 
   const resetForm = () => {
     setPlatform("");
-    setHandle("");
-    setUrl("");
-    setFollowerCount("");
     setSelectedTags([]);
     setIsConnecting(false);
   };
@@ -148,7 +150,7 @@ const PagesPro = () => {
     return false;
   };
 
-  const connectPlatform = async (provider: "instagram" | "tiktok") => {
+  const connectPlatform = async (provider: "instagram" | "tiktok" | "youtube") => {
     if (!user || !requireTags()) return;
     setIsConnecting(true);
 
@@ -156,47 +158,23 @@ const PagesPro = () => {
       const token = await getNeonAccessToken();
       if (!token) throw new Error("Sua sessão expirou. Saia e entre novamente.");
 
-      localStorage.setItem(`pending_${provider}_page_tags`, JSON.stringify(selectedTags));
-
-      const endpoint = provider === "instagram"
-        ? `${API_BASE}/api/integrations/instagram/start`
-        : `${API_BASE}/api/integrations/tiktok/auth-url`;
+      const endpointPaths = {
+        instagram: "/api/integrations/instagram/start",
+        tiktok: "/api/integrations/tiktok/auth-url",
+        youtube: "/api/integrations/youtube/start",
+      };
+      const query = new URLSearchParams({ tags: JSON.stringify(selectedTags) });
+      const endpoint = `${API_BASE}${endpointPaths[provider]}?${query.toString()}`;
 
       const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       const json = await response.json();
-      const oauthUrl = provider === "instagram" ? json.url : json.data?.url;
+      const oauthUrl = provider === "tiktok" ? json.data?.url : json.url;
 
       if (!response.ok || !oauthUrl) throw new Error(json.error || json.details || "Não foi possível iniciar a conexão.");
       window.location.href = oauthUrl;
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsConnecting(false);
-      toast({ title: "Falha na conexão", description: error.message || String(error), variant: "destructive" });
-    }
-  };
-
-  const addManualPage = async () => {
-    if (!platform || !handle || !url || !followerCount || !requireTags()) {
-      if (!platform || !handle || !url || !followerCount) {
-        toast({ title: "Preencha os campos obrigatórios", description: "Informe usuário, URL e número de seguidores.", variant: "destructive" });
-      }
-      return;
-    }
-
-    try {
-      await apiClient.pages.create({
-        platform: platform as "youtube_shorts",
-        handle: cleanHandle(handle),
-        url,
-        follower_count: Number(followerCount),
-        tags: selectedTags,
-        verified: false,
-      });
-      toast({ title: "Página adicionada", description: "Sua página foi salva com sucesso." });
-      setIsDialogOpen(false);
-      resetForm();
-      await fetchPages();
-    } catch (error: any) {
-      toast({ title: "Não foi possível adicionar a página", description: error.message || String(error), variant: "destructive" });
+      toast({ title: "Falha na conexão", description: getErrorMessage(error), variant: "destructive" });
     }
   };
 
@@ -205,8 +183,8 @@ const PagesPro = () => {
       await apiClient.pages.remove(pageId);
       setPages((current) => current.filter((page) => page.id !== pageId));
       toast({ title: "Página removida" });
-    } catch (error: any) {
-      toast({ title: "Não foi possível remover a página", description: error.message || String(error), variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Não foi possível remover a página", description: getErrorMessage(error), variant: "destructive" });
     }
   };
 
@@ -264,7 +242,7 @@ const PagesPro = () => {
                   <DialogHeader>
                     <DialogTitle className="text-xl font-extrabold">Adicionar página</DialogTitle>
                     <DialogDescription className="text-[0.93rem] leading-relaxed">
-                      Instagram e TikTok são verificados pelo login da própria plataforma. Por enquanto, YouTube Shorts pode ser cadastrado manualmente.
+                      Instagram, TikTok e YouTube são verificados pelo login da própria plataforma.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -318,13 +296,20 @@ const PagesPro = () => {
                     )}
 
                     {platform === "youtube_shorts" && (
-                      <div className="space-y-4">
-                        <div><Label>Usuário / canal *</Label><Input className="mt-2" placeholder="@seucanal" value={handle} onChange={(e) => setHandle(cleanHandle(e.target.value))} /></div>
-                        <div><Label>URL do perfil *</Label><Input className="mt-2" placeholder="https://youtube.com/@..." value={url} onChange={(e) => setUrl(e.target.value)} /></div>
-                        <div><Label>Número de seguidores *</Label><Input className="mt-2" type="number" placeholder="10000" value={followerCount} onChange={(e) => setFollowerCount(e.target.value)} /></div>
+                      <div className="space-y-5">
+                        <Card className="somma-panel rounded-2xl">
+                          <CardContent className="p-5 flex gap-4 items-start">
+                            <div className="h-11 w-11 rounded-xl bg-red-50 text-red-700 flex items-center justify-center shrink-0"><Youtube className="h-5 w-5" /></div>
+                            <div>
+                              <p className="font-extrabold">Verifique seu canal do YouTube</p>
+                              <p className="ui-caption mt-1">Você será direcionado ao Google para escolher a conta. A Somma salvará automaticamente o canal, o link, o número público de inscritos e o status de verificação.</p>
+                            </div>
+                          </CardContent>
+                        </Card>
                         {tagPicker}
-                        <Button className="w-full rounded-xl" onClick={addManualPage}>Adicionar página</Button>
-                        <p className="ui-caption">Páginas cadastradas manualmente ficam como não verificadas até a integração de autenticação estar disponível.</p>
+                        <Button className="w-full rounded-xl" disabled={isConnecting} onClick={() => connectPlatform("youtube")}>
+                          <Youtube className="h-4 w-4 mr-2" />{isConnecting ? "Conectando..." : "Conectar YouTube"}
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -371,8 +356,8 @@ const PagesPro = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-center justify-between gap-3 text-[0.92rem]">
-                        <span className="text-muted-foreground">Seguidores</span>
-                        <strong>{Number(page.follower_count || 0).toLocaleString("pt-BR")}</strong>
+                        <span className="text-muted-foreground">{page.platform === "youtube_shorts" ? "Inscritos" : "Seguidores"}</span>
+                        <strong>{page.follower_count === null || page.follower_count === undefined ? "Oculto ou indisponível" : Number(page.follower_count).toLocaleString("pt-BR")}</strong>
                       </div>
                       {page.url && (
                         <a href={page.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[0.9rem] font-bold text-primary hover:underline">
