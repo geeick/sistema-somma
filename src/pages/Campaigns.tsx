@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Instagram, Play, Youtube, Calendar, DollarSign, Target, Search } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { normalizeStringList } from "@/lib/normalizeStringList";
 
 interface Campaign {
   id: string;
@@ -22,21 +23,8 @@ interface Campaign {
   status: string;
 }
 
-function normalizeList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string");
-    } catch {
-      return value.split(",").map((item) => item.trim()).filter(Boolean);
-    }
-  }
-  return [];
-}
-
 function normalizeCampaign(campaign: any): Campaign {
-  return { ...campaign, required_tags: normalizeList(campaign.required_tags), platforms: normalizeList(campaign.platforms) };
+  return { ...campaign, required_tags: normalizeStringList(campaign.required_tags), platforms: normalizeStringList(campaign.platforms) };
 }
 
 function normalizePlatform(platform: string) {

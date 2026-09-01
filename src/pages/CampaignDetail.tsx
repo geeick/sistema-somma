@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, DollarSign, ExternalLink, Instagram, Play, Target, Users, Youtube, ArrowLeft, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { normalizeStringList } from "@/lib/normalizeStringList";
 
 interface Campaign {
   id: string;
@@ -24,7 +25,7 @@ interface Campaign {
   audio_url: string | null;
   audio_urls: Record<string, string> | string | null;
   example_urls: Record<string, string> | string | null;
-  rules: any;
+  rules: unknown;
   max_posts_per_creator: number | null;
   status: string;
 }
@@ -38,19 +39,6 @@ interface Page {
 }
 
 const platformIcons = { instagram: Instagram, tiktok: Play, youtube_shorts: Youtube };
-
-function normalizeStringList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string");
-    } catch {
-      return value.split(",").map((item) => item.trim()).filter(Boolean);
-    }
-  }
-  return [];
-}
 
 function normalizeRecord(value: unknown): Record<string, string> | null {
   if (!value) return null;
@@ -81,7 +69,57 @@ function formatMoney(value?: number | null) {
 
 function platformLabel(platform: string) {
   const labels: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", youtube_shorts: "YouTube Shorts" };
-  return labels[platform] || platform.replace("_", " ");
+  const normalized = platform.trim().toLowerCase();
+  return labels[normalized] || normalized.replaceAll("_", " ");
+}
+
+const ruleLabels: Record<string, string> = {
+  artist: "Artista",
+  description: "Orientações",
+  instructions: "Instruções",
+  content: "Conteúdo",
+  hashtags: "Hashtags",
+  mentions: "Marcações",
+};
+
+function campaignRuleEntries(value: unknown): Array<{ label: string; value: string }> {
+  if (!value) return [];
+
+  let normalized = value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      normalized = JSON.parse(trimmed);
+    } catch {
+      return [{ label: "Orientações", value: trimmed }];
+    }
+  }
+
+  if (Array.isArray(normalized)) {
+    const text = normalizeStringList(normalized).join(", ");
+    return text ? [{ label: "Orientações", value: text }] : [];
+  }
+
+  if (typeof normalized !== "object" || normalized === null) {
+    return [{ label: "Orientações", value: String(normalized) }];
+  }
+
+  return Object.entries(normalized as Record<string, unknown>)
+    .map(([key, item]) => {
+      const text = Array.isArray(item)
+        ? item.map(String).join(", ")
+        : typeof item === "object" && item !== null
+          ? Object.values(item).map(String).join(", ")
+          : String(item ?? "").trim();
+
+      const fallbackLabel = key
+        .replaceAll("_", " ")
+        .replace(/^./, (letter) => letter.toUpperCase());
+
+      return { label: ruleLabels[key] || fallbackLabel, value: text };
+    })
+    .filter((entry) => entry.value);
 }
 
 function pageMatchesRequiredTags(page: Page, requiredTags: string[]) {
@@ -142,6 +180,7 @@ const CampaignDetail = () => {
   const isInactive = campaign?.status && campaign.status !== "active";
   const audioUrls = normalizeRecord(campaign?.audio_urls);
   const exampleUrls = normalizeRecord(campaign?.example_urls);
+  const ruleEntries = campaignRuleEntries(campaign?.rules);
 
   if (isLoading || !campaign) {
     return (
@@ -190,7 +229,7 @@ const CampaignDetail = () => {
                 <CardContent className="space-y-6">
                   {campaign.brief && (
                     <div>
-                      <h3 className="font-extrabold mb-2">Briefing</h3>
+                      <h3 className="font-extrabold mb-2">Resumo criativo</h3>
                       <p className="text-[0.96rem] leading-relaxed text-muted-foreground whitespace-pre-wrap">{campaign.brief}</p>
                     </div>
                   )}
@@ -204,7 +243,7 @@ const CampaignDetail = () => {
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><Calendar className="h-4 w-4" />Encerramento</div><p className="font-extrabold">{formatDate(campaign.end_date)}</p></div>
-                    <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><Users className="h-4 w-4" />Limite por criador</div><p className="font-extrabold">{campaign.max_posts_per_creator || 1} {campaign.max_posts_per_creator === 1 ? "post" : "posts"}</p></div>
+                    <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><Users className="h-4 w-4" />Limite por criador</div><p className="font-extrabold">{campaign.max_posts_per_creator || 1} {campaign.max_posts_per_creator === 1 ? "publicação" : "publicações"}</p></div>
                     {campaign.budget !== null && campaign.budget !== undefined && (
                       <div className="rounded-xl border border-border bg-background/55 p-4"><div className="flex items-center gap-2 ui-caption mb-1"><DollarSign className="h-4 w-4" />Orçamento</div><p className="font-extrabold text-primary">{formatMoney(campaign.budget)}</p></div>
                     )}
@@ -245,10 +284,17 @@ const CampaignDetail = () => {
                     </div>
                   )}
 
-                  {campaign.rules && (
+                  {ruleEntries.length > 0 && (
                     <div>
                       <h3 className="font-extrabold mb-2">Regras da campanha</h3>
-                      <pre className="whitespace-pre-wrap rounded-xl border border-border bg-background/55 p-4 text-[0.9rem] leading-relaxed text-muted-foreground font-sans">{typeof campaign.rules === "string" ? campaign.rules : JSON.stringify(campaign.rules, null, 2)}</pre>
+                      <dl className="grid gap-3 rounded-xl border border-border bg-background/55 p-4 sm:grid-cols-2">
+                        {ruleEntries.map((rule) => (
+                          <div key={`${rule.label}-${rule.value}`} className="min-w-0">
+                            <dt className="text-sm font-bold text-foreground">{rule.label}</dt>
+                            <dd className="mt-1 whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed text-muted-foreground">{rule.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
                     </div>
                   )}
                 </CardContent>

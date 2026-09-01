@@ -89,6 +89,12 @@ function shouldSkip(el: Element | null) {
   return tag === "script" || tag === "style" || tag === "noscript" || !!el.closest("[data-no-translate]");
 }
 
+function replaceDelimitedText(value: string, from: string, to: string) {
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "gu");
+  return value.replace(pattern, to);
+}
+
 function translateText(node: Text) {
   if (shouldSkip(node.parentElement)) return;
   const original = node.nodeValue || "";
@@ -103,7 +109,7 @@ function translateText(node: Text) {
 
   let result = original;
   for (const [from, to] of Object.entries(EXTRA_TRANSLATIONS)) {
-    if (result.includes(from)) result = result.split(from).join(to);
+    result = replaceDelimitedText(result, from, to);
   }
   if (result !== original) node.nodeValue = result;
 }
