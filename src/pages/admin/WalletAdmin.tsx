@@ -49,7 +49,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
   const token = await getNeonAccessToken();
 
   if (!token) {
-    throw new Error("No Neon Auth token found. Sign in again.");
+    throw new Error("Token de autenticação não encontrado. Entre novamente.");
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -65,8 +65,8 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     throw new Error(
-      `Backend returned ${res.status}: ${
-        json?.details || json?.error || json?.message || "Unknown error"
+      `O servidor retornou ${res.status}: ${
+        json?.details || json?.error || json?.message || "erro desconhecido"
       }`
     );
   }
@@ -87,11 +87,11 @@ function formatMoney(value?: number | string | null) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Not set";
+  if (!value) return "Não informado";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "Not set";
+  if (Number.isNaN(date.getTime())) return "Não informado";
 
   return date.toLocaleDateString("pt-BR");
 }
@@ -99,7 +99,7 @@ function formatDate(value?: string | null) {
 function getPixKeyDisplay(withdrawal: Withdrawal) {
   if (withdrawal.pix_key) return withdrawal.pix_key;
   if (withdrawal.pix_key_last4) return `**** ${withdrawal.pix_key_last4}`;
-  return "No PIX key";
+  return "Sem chave PIX";
 }
 
 async function copyText(text: string) {
@@ -112,6 +112,15 @@ function getStatusBadgeVariant(status?: string | null) {
   if (status === "rejected") return "destructive";
   return "secondary";
 }
+
+const statusLabels: Record<string, string> = {
+  requested: "Solicitado",
+  pending: "Pendente",
+  approved: "Aprovado",
+  paid: "Pago",
+  rejected: "Rejeitado",
+  unknown: "Desconhecido",
+};
 
 function StatCard({
   title,
@@ -162,12 +171,12 @@ export default function WalletAdmin() {
       setWithdrawals(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error("Failed to load wallet data:", err);
-      setError(err.message || "Failed to load wallet data");
+      setError(err.message || "Não foi possível carregar os dados da carteira");
       setWithdrawals([]);
 
       toast({
-        title: "Failed to load wallet data",
-        description: err.message || "Could not load wallet data",
+        title: "Não foi possível carregar a carteira",
+        description: err.message || "Não foi possível carregar os dados da carteira",
         variant: "destructive",
       });
     } finally {
@@ -247,14 +256,14 @@ export default function WalletAdmin() {
       );
 
       toast({
-        title: "Success",
-        description: `Withdrawal marked as ${status}`,
+        title: "Sucesso",
+        description: `Saque marcado como ${statusLabels[status]?.toLowerCase() || status}`,
       });
     } catch (err: any) {
       console.error("Failed to update withdrawal:", err);
       toast({
-        title: "Error",
-        description: err.message || "Failed to update withdrawal",
+        title: "Erro",
+        description: err.message || "Não foi possível atualizar o saque",
         variant: "destructive",
       });
     } finally {
@@ -264,14 +273,14 @@ export default function WalletAdmin() {
 
   const exportCsv = () => {
     const rows = [
-      ["ID", "Creator", "User ID", "Amount", "PIX Key", "Status", "Requested At"],
+      ["ID", "Criador", "ID do usuário", "Valor", "Chave PIX", "Status", "Solicitado em"],
       ...withdrawals.map((withdrawal) => [
         withdrawal.id,
         withdrawal.creator_email || withdrawal.creator_name || withdrawal.user_id || "",
         withdrawal.user_id || "",
         String(withdrawal.amount || 0),
         getPixKeyDisplay(withdrawal),
-        withdrawal.status || "",
+        statusLabels[withdrawal.status || "unknown"] || withdrawal.status || "",
         formatDate(withdrawal.requested_at),
       ]),
     ];
@@ -289,7 +298,7 @@ export default function WalletAdmin() {
     const a = document.createElement("a");
 
     a.href = url;
-    a.download = `withdrawals-${new Date().toISOString()}.csv`;
+    a.download = `saques-${new Date().toISOString()}.csv`;
     a.click();
 
     URL.revokeObjectURL(url);
@@ -300,7 +309,7 @@ export default function WalletAdmin() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Carteira & Pagamentos</h1>
-          <p className="text-muted-foreground">Loading wallet data...</p>
+          <p className="text-muted-foreground">Carregando dados da carteira...</p>
         </div>
       </div>
     );
@@ -314,7 +323,7 @@ export default function WalletAdmin() {
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-8 w-8 text-destructive" />
               <div>
-                <CardTitle>Could not load wallet data</CardTitle>
+                <CardTitle>Não foi possível carregar os dados da carteira</CardTitle>
                 <CardDescription>{error}</CardDescription>
               </div>
             </div>
@@ -323,19 +332,19 @@ export default function WalletAdmin() {
           <CardContent className="space-y-4">
             <Button onClick={loadWalletData}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try again
+              Tentar novamente
             </Button>
 
             <div className="rounded-lg bg-muted p-4">
-              <p className="font-semibold mb-2">Debug info</p>
+              <p className="font-semibold mb-2">Informações técnicas</p>
               <pre className="text-xs whitespace-pre-wrap overflow-x-auto">
                 {JSON.stringify(rawResponse, null, 2)}
               </pre>
             </div>
 
             <p className="text-sm text-muted-foreground">
-              If this says Backend returned 500, update the backend
-              /api/admin/withdrawals route so it returns the full PIX key for admins.
+              Se a mensagem indicar erro 500, atualize a rota /api/admin/withdrawals
+              do servidor para que ela retorne a chave PIX completa aos administradores.
             </p>
           </CardContent>
         </Card>
@@ -365,58 +374,58 @@ export default function WalletAdmin() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <StatCard
-          title="Pending Requests"
+          title="Solicitações pendentes"
           value={String(stats.pendingCount)}
-          description="Withdrawal requests waiting for review"
+          description="Solicitações de saque aguardando análise"
           icon={Clock}
         />
 
         <StatCard
-          title="Pending Amount"
+          title="Valor pendente"
           value={formatMoney(stats.pendingAmount)}
-          description="Total amount requested"
+          description="Valor total solicitado"
           icon={DollarSign}
         />
 
         <StatCard
-          title="Total Paid Out"
+          title="Total pago"
           value={formatMoney(stats.totalPaid)}
-          description="Withdrawals marked as paid"
+          description="Saques marcados como pagos"
           icon={TrendingUp}
         />
 
         <StatCard
-          title="Active Creators"
+          title="Criadores ativos"
           value={String(stats.activeCreators)}
-          description="Creators with withdrawal records"
+          description="Criadores com registros de saque"
           icon={Users}
         />
       </div>
 
       <Card className="bg-gradient-card border-border">
         <CardHeader>
-          <CardTitle>Pending Withdrawal Requests</CardTitle>
+          <CardTitle>Solicitações de saque pendentes</CardTitle>
           <CardDescription>
-            Review and process creator withdrawal requests.
+            Analise e processe as solicitações de saque dos criadores.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
           {pendingWithdrawals.length === 0 ? (
             <p className="text-center text-muted-foreground py-10">
-              No pending withdrawals
+              Nenhum saque pendente
             </p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Creator</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>PIX Key</TableHead>
+                    <TableHead>Criador</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead>Chave PIX</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Requested</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Solicitado em</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -427,7 +436,7 @@ export default function WalletAdmin() {
                         <div className="font-medium">
                           {withdrawal.creator_email ||
                             withdrawal.creator_name ||
-                            "Unknown creator"}
+                            "Criador desconhecido"}
                         </div>
                         <div className="text-xs text-muted-foreground max-w-[260px] truncate">
                           {withdrawal.user_id}
@@ -452,12 +461,12 @@ export default function WalletAdmin() {
                               onClick={() => {
                                 copyText(withdrawal.pix_key || "");
                                 toast({
-                                  title: "Copied",
-                                  description: "PIX key copied to clipboard",
+                                  title: "Copiado",
+                                  description: "Chave PIX copiada para a área de transferência",
                                 });
                               }}
                             >
-                              Copy
+                              Copiar
                             </Button>
                           )}
                         </div>
@@ -465,7 +474,7 @@ export default function WalletAdmin() {
 
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(withdrawal.status)}>
-                          {withdrawal.status || "unknown"}
+                          {statusLabels[withdrawal.status || "unknown"] || withdrawal.status}
                         </Badge>
                       </TableCell>
 
@@ -483,7 +492,7 @@ export default function WalletAdmin() {
                               }
                             >
                               <CheckCircle className="h-4 w-4 mr-1" />
-                              Approve
+                              Aprovar
                             </Button>
                           )}
 
@@ -496,7 +505,7 @@ export default function WalletAdmin() {
                             }
                           >
                             <Wallet className="h-4 w-4 mr-1" />
-                            Mark Paid
+                            Marcar como pago
                           </Button>
 
                           <Button
@@ -508,7 +517,7 @@ export default function WalletAdmin() {
                             }
                           >
                             <XCircle className="h-4 w-4 mr-1" />
-                            Reject
+                            Rejeitar
                           </Button>
                         </div>
                       </TableCell>
@@ -523,27 +532,27 @@ export default function WalletAdmin() {
 
       <Card className="bg-gradient-card border-border">
         <CardHeader>
-          <CardTitle>Completed Withdrawal Requests</CardTitle>
+          <CardTitle>Solicitações de saque concluídas</CardTitle>
           <CardDescription>
-            Paid and rejected withdrawal history across creators.
+            Histórico de saques pagos e rejeitados dos criadores.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
           {completedWithdrawals.length === 0 ? (
             <p className="text-center text-muted-foreground py-10">
-              No completed withdrawals yet
+              Nenhum saque concluído.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Creator</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>PIX Key</TableHead>
+                    <TableHead>Criador</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead>Chave PIX</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Requested</TableHead>
+                    <TableHead>Solicitado em</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -554,7 +563,7 @@ export default function WalletAdmin() {
                         <div className="font-medium">
                           {withdrawal.creator_email ||
                             withdrawal.creator_name ||
-                            "Unknown creator"}
+                            "Criador desconhecido"}
                         </div>
                         <div className="text-xs text-muted-foreground max-w-[260px] truncate">
                           {withdrawal.user_id}
@@ -579,12 +588,12 @@ export default function WalletAdmin() {
                               onClick={() => {
                                 copyText(withdrawal.pix_key || "");
                                 toast({
-                                  title: "Copied",
-                                  description: "PIX key copied to clipboard",
+                                  title: "Copiado",
+                                  description: "Chave PIX copiada para a área de transferência",
                                 });
                               }}
                             >
-                              Copy
+                              Copiar
                             </Button>
                           )}
                         </div>
@@ -592,7 +601,7 @@ export default function WalletAdmin() {
 
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(withdrawal.status)}>
-                          {withdrawal.status || "unknown"}
+                          {statusLabels[withdrawal.status || "unknown"] || withdrawal.status}
                         </Badge>
                       </TableCell>
 
@@ -608,6 +617,4 @@ export default function WalletAdmin() {
     </div>
   );
 }
-
-
 
