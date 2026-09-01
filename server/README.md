@@ -13,6 +13,11 @@ npm install
 
 - `DATABASE_URL` — Neon DB connection string
 - `NEON_AUTH_JWKS_URI` — JWKS URI for Neon Auth (used to verify JWTs)
+- `YOUTUBE_CLIENT_ID` — Google OAuth web client ID
+- `YOUTUBE_CLIENT_SECRET` — Google OAuth web client secret
+- `YOUTUBE_REDIRECT_URI` — exact backend callback registered in Google Cloud
+- `YOUTUBE_SCOPES` — defaults to `https://www.googleapis.com/auth/youtube.readonly`
+- `FRONTEND_BASE_URL` — frontend URL used after OAuth completes
 
 3. Run server:
 
@@ -27,6 +32,8 @@ This server exposes:
 - `GET /api/pages` — list pages for authenticated user
 - `POST /api/pages` — create page (authenticated)
 - `DELETE /api/pages/:id` — delete page owned by authenticated user
+- `GET /api/integrations/youtube/start` — create a Google authorization URL
+- `GET /api/integrations/youtube/callback` — verify and save the creator's YouTube channel
 - `GET /api/profile` — get profile for authenticated user
 - `GET /api/withdrawals` — list withdrawals for authenticated user
 - `POST /api/withdrawals` — request withdrawal

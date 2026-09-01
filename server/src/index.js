@@ -91,8 +91,13 @@ function signStateBody(body) {
     .digest('base64url');
 }
 
-function createOAuthState(userId) {
+function createOAuthState(userId, extra = {}) {
+  const safeExtra = extra && typeof extra === 'object' && !Array.isArray(extra)
+    ? extra
+    : {};
+
   const body = Buffer.from(JSON.stringify({
+    ...safeExtra,
     userId,
     nonce: crypto.randomBytes(16).toString('hex'),
     expiresAt: Date.now() + 10 * 60 * 1000,
@@ -249,6 +254,14 @@ function normalizeArray(value) {
     }
   }
   return [];
+}
+
+function normalizeOAuthTags(value) {
+  return normalizeArray(value)
+    .filter((item) => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 25);
 }
 
 function normalizeJsonObject(value) {
@@ -618,6 +631,28 @@ function requireTikTokConfig() {
   if (!config.clientKey || !config.clientSecret || !config.redirectUri) {
     throw new Error(
       'TikTok OAuth is not configured. Set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, and TIKTOK_REDIRECT_URI in .env.local'
+    );
+  }
+
+  return config;
+}
+
+function getYouTubeConfig() {
+  return {
+    clientId: process.env.YOUTUBE_CLIENT_ID,
+    clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
+    redirectUri: process.env.YOUTUBE_REDIRECT_URI,
+    scopes: process.env.YOUTUBE_SCOPES || 'https://www.googleapis.com/auth/youtube.readonly',
+    frontendBaseUrl: process.env.FRONTEND_BASE_URL || 'http://localhost:8080',
+  };
+}
+
+function requireYouTubeConfig() {
+  const config = getYouTubeConfig();
+
+  if (!config.clientId || !config.clientSecret || !config.redirectUri) {
+    throw new Error(
+      'YouTube OAuth is not configured. Set YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, and YOUTUBE_REDIRECT_URI.'
     );
   }
 
@@ -1662,7 +1697,10 @@ app.get('/api/integrations/instagram/start', verifyToken, async (req, res) => {
 
     const authUrl = process.env.INSTAGRAM_AUTH_URL || 'https://www.instagram.com/oauth/authorize';
     const scope = process.env.INSTAGRAM_SCOPES || 'instagram_business_basic';
-    const state = createOAuthState(req.user.sub);
+    const state = createOAuthState(req.user.sub, {
+      provider: 'instagram',
+      tags: normalizeOAuthTags(req.query.tags),
+    });
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -1694,6 +1732,7 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
   try {
     const parsedState = parseAndVerifyOAuthState(state);
     const userId = parsedState.userId;
+    const oauthTags = normalizeOAuthTags(parsedState.tags);
 
     const clientId = process.env.INSTAGRAM_CLIENT_ID;
     const clientSecret = process.env.INSTAGRAM_CLIENT_SECRET;
@@ -1776,11 +1815,15 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
           page_key = $6,
           dedupe_guard = true,
           verified = true,
-          verified_at = now()
+          verified_at = now(),
+          tags = CASE
+            WHEN COALESCE(array_length($7::text[], 1), 0) > 0 THEN $7::text[]
+            ELSE tags
+          END
         WHERE id = $1
         RETURNING *
         `,
-        [page.id, handle, url, profileJson.followers_count || null, instagramExternalId, pageKey]
+        [page.id, handle, url, profileJson.followers_count || null, instagramExternalId, pageKey, oauthTags]
       );
 
       page = updateResult.rows[0] || page;
@@ -1804,7 +1847,7 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
         VALUES($1, 'instagram', $2, $3, $4, $5, $6, $7, true, true, now(), now())
         RETURNING *
         `,
-        [userId, handle, url, profileJson.followers_count || null, [], instagramExternalId, pageKey]
+        [userId, handle, url, profileJson.followers_count || null, oauthTags, instagramExternalId, pageKey]
       );
 
       page = pageResult.rows[0];
@@ -1852,6 +1895,206 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
 });
 
 
+// YouTube OAuth routes.
+// Google verifies ownership of the selected YouTube channel. Somma uses the
+// short-lived access token only during the callback and does not persist it.
+app.get('/api/integrations/youtube/start', verifyToken, async (req, res) => {
+  try {
+    const config = requireYouTubeConfig();
+    const state = createOAuthState(req.user.sub, {
+      provider: 'youtube',
+      tags: normalizeOAuthTags(req.query.tags),
+    });
+
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: config.redirectUri,
+      response_type: 'code',
+      scope: config.scopes,
+      state,
+      include_granted_scopes: 'true',
+      prompt: 'select_account',
+    });
+
+    res.json({
+      url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    });
+  } catch (err) {
+    console.error('YouTube OAuth start error', err);
+    res.status(500).json({
+      error: 'Não foi possível iniciar a conexão com o YouTube.',
+      details: err.message,
+    });
+  }
+});
+
+app.get('/api/integrations/youtube/callback', async (req, res) => {
+  const config = getYouTubeConfig();
+  const { code, state, error, error_description } = req.query;
+
+  if (error) {
+    console.error('YouTube OAuth denied', { error, error_description });
+    return res.redirect(
+      `${config.frontendBaseUrl}/pages?youtube=denied&message=${encodeURIComponent(
+        String(error_description || error)
+      )}`
+    );
+  }
+
+  if (!code || !state) {
+    return res.redirect(`${config.frontendBaseUrl}/pages?youtube=missing_code`);
+  }
+
+  try {
+    const completeConfig = requireYouTubeConfig();
+    const parsedState = parseAndVerifyOAuthState(String(state));
+
+    if (parsedState.provider && parsedState.provider !== 'youtube') {
+      throw new Error('Invalid OAuth provider state');
+    }
+
+    const userId = parsedState.userId;
+    const oauthTags = normalizeOAuthTags(parsedState.tags);
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: completeConfig.clientId,
+        client_secret: completeConfig.clientSecret,
+        code: String(code),
+        grant_type: 'authorization_code',
+        redirect_uri: completeConfig.redirectUri,
+      }),
+    });
+
+    const tokenJson = await readJsonResponse(tokenResponse);
+
+    if (!tokenResponse.ok || !tokenJson.access_token) {
+      console.error('YouTube token exchange failed', tokenJson);
+      throw new Error(tokenJson.error_description || tokenJson.error || 'YouTube token exchange failed');
+    }
+
+    const channelResponse = await fetch(
+      'https://www.googleapis.com/youtube/v3/channels?part=id,snippet,statistics&mine=true',
+      {
+        headers: {
+          Authorization: `Bearer ${tokenJson.access_token}`,
+        },
+      }
+    );
+
+    const channelJson = await readJsonResponse(channelResponse);
+    const channel = Array.isArray(channelJson.items) ? channelJson.items[0] : null;
+
+    if (!channelResponse.ok || !channel?.id) {
+      console.error('YouTube channel fetch failed', channelJson);
+      throw new Error(
+        channelJson.error?.message || 'Nenhum canal do YouTube foi encontrado nesta conta.'
+      );
+    }
+
+    const channelId = String(channel.id);
+    const channelTitle = String(channel.snippet?.title || 'Canal do YouTube').trim();
+    const customUrl = String(channel.snippet?.customUrl || '').trim();
+    const handle = customUrl
+      ? `@${customUrl.replace(/^@+/, '')}`
+      : channelTitle;
+    const url = `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`;
+    const followerCount = channel.statistics?.hiddenSubscriberCount
+      ? null
+      : numberOrNull(channel.statistics?.subscriberCount);
+    const pageKey = getPageDedupeKey('youtube_shorts', {
+      external_account_id: channelId,
+      handle,
+      url,
+    });
+
+    const existingPageResult = await pool.query(
+      `
+      SELECT *
+      FROM pages
+      WHERE user_id::text = $1
+        AND platform = 'youtube_shorts'
+        AND (
+          external_account_id = $2
+          OR page_key = $3
+          OR LOWER(handle) = LOWER($4)
+        )
+      ORDER BY verified DESC, created_at DESC
+      LIMIT 1
+      `,
+      [String(userId), channelId, pageKey, handle]
+    );
+
+    let page = existingPageResult.rows[0] || null;
+
+    if (page) {
+      const updateResult = await pool.query(
+        `
+        UPDATE pages
+        SET
+          handle = $2,
+          url = $3,
+          follower_count = $4,
+          external_account_id = $5,
+          page_key = $6,
+          dedupe_guard = true,
+          verified = true,
+          verified_at = now(),
+          tags = CASE
+            WHEN COALESCE(array_length($7::text[], 1), 0) > 0 THEN $7::text[]
+            ELSE tags
+          END
+        WHERE id = $1
+        RETURNING *
+        `,
+        [page.id, handle, url, followerCount, channelId, pageKey, oauthTags]
+      );
+
+      page = updateResult.rows[0] || page;
+    } else {
+      const pageResult = await pool.query(
+        `
+        INSERT INTO pages(
+          user_id,
+          platform,
+          handle,
+          url,
+          follower_count,
+          tags,
+          external_account_id,
+          page_key,
+          dedupe_guard,
+          verified,
+          verified_at,
+          created_at
+        )
+        VALUES($1, 'youtube_shorts', $2, $3, $4, $5, $6, $7, true, true, now(), now())
+        RETURNING *
+        `,
+        [userId, handle, url, followerCount, oauthTags, channelId, pageKey]
+      );
+
+      page = pageResult.rows[0];
+    }
+
+    if (!page) {
+      throw new Error('Não foi possível salvar o canal verificado do YouTube.');
+    }
+
+    return res.redirect(`${completeConfig.frontendBaseUrl}/pages?youtube=connected`);
+  } catch (err) {
+    console.error('YouTube OAuth callback error', err);
+    return res.redirect(
+      `${config.frontendBaseUrl}/pages?youtube=error&message=${encodeURIComponent(err.message)}`
+    );
+  }
+});
+
+
 
 // TikTok OAuth routes.
 // The frontend calls /auth-url with a normal Bearer token. The backend
@@ -1860,7 +2103,10 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
 app.get('/api/integrations/tiktok/auth-url', verifyToken, async (req, res) => {
   try {
     const config = requireTikTokConfig();
-    const state = createOAuthState(req.user.sub);
+    const state = createOAuthState(req.user.sub, {
+      provider: 'tiktok',
+      tags: normalizeOAuthTags(req.query.tags),
+    });
 
     const params = new URLSearchParams({
       client_key: config.clientKey,
@@ -1903,6 +2149,7 @@ app.get('/api/integrations/tiktok/callback', async (req, res) => {
 
     const parsedState = parseAndVerifyOAuthState(String(state));
     const userId = parsedState.userId;
+    const oauthTags = normalizeOAuthTags(parsedState.tags);
 
     const tokenData = await exchangeTikTokCodeForToken(String(code));
     const accessToken = tokenData.access_token;
@@ -1955,11 +2202,15 @@ app.get('/api/integrations/tiktok/callback', async (req, res) => {
           verified_at = now(),
           external_account_id = $3,
           page_key = $4,
-          dedupe_guard = true
+          dedupe_guard = true,
+          tags = CASE
+            WHEN COALESCE(array_length($5::text[], 1), 0) > 0 THEN $5::text[]
+            ELSE tags
+          END
         WHERE id = $1
         RETURNING *
         `,
-        [page.id, handle, tiktokExternalId, pageKey]
+        [page.id, handle, tiktokExternalId, pageKey, oauthTags]
       );
 
       page = updateResult.rows[0] || page;
@@ -1980,10 +2231,10 @@ app.get('/api/integrations/tiktok/callback', async (req, res) => {
           verified_at,
           created_at
         )
-        VALUES($1, 'tiktok', $2, $3, 0, '{}', $4, $5, true, true, now(), now())
+        VALUES($1, 'tiktok', $2, $3, 0, $4, $5, $6, true, true, now(), now())
         RETURNING *
         `,
-        [userId, handle, '', tiktokExternalId, pageKey]
+        [userId, handle, '', oauthTags, tiktokExternalId, pageKey]
       );
 
       page = pageResult.rows[0];
