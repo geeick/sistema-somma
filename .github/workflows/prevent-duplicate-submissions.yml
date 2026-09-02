@@ -1,0 +1,164 @@
+name: Prevent duplicate submissions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/prevent-duplicate-submissions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prevent duplicate posts in the same campaign
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('server/src/index.js')
+          text = path.read_text()
+
+          old = '''    const result = await pool.query(
+      `
+      INSERT INTO submissions(
+        user_id,
+        campaign_id,
+        page_id,
+        title,
+        platform,
+        post_url,
+        tiktok_video_id,
+        status,
+        audio_verified,
+        uploaded_at,
+        created_at
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7,'pending',false,now(),now())
+      RETURNING *
+      `,
+      [
+        userId,
+        campaign.id,
+        page.id,
+        `${campaign.title || 'Campaign'} - Submission`,
+        page.platform,
+        canonicalPostUrl,
+        page.platform === 'tiktok' ? String(contentId) : null,
+      ]
+    );
+
+    const inserted = result.rows[0];
+'''
+
+          new = '''    const dbClient = await pool.connect();
+    let inserted;
+
+    try {
+      await dbClient.query('BEGIN');
+
+      // Serialize attempts for the same creator + campaign + publication so
+      // two nearly simultaneous clicks cannot create duplicate rows.
+      const submissionDedupeKey = [
+        String(userId),
+        String(campaign.id),
+        normalizePlatform(page.platform),
+        normalizeUrlForMatch(canonicalPostUrl),
+      ].join(':');
+
+      await dbClient.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        [submissionDedupeKey]
+      );
+
+      const priorSubmissions = await dbClient.query(
+        `
+        SELECT id, post_url, tiktok_video_id, status
+        FROM submissions
+        WHERE user_id::text = $1
+          AND campaign_id::text = $2
+        `,
+        [String(userId), String(campaign.id)]
+      );
+
+      const duplicateSubmission = priorSubmissions.rows.find((existing) => {
+        const sameTikTokVideo =
+          normalizePlatform(page.platform) === 'tiktok' &&
+          String(existing.tiktok_video_id || '') &&
+          String(existing.tiktok_video_id || '') === String(contentId);
+
+        return sameTikTokVideo || urlsMatch(existing.post_url, canonicalPostUrl);
+      });
+
+      if (duplicateSubmission) {
+        await dbClient.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Esta publicação já foi enviada para esta campanha.',
+          code: 'DUPLICATE_CAMPAIGN_POST',
+          existing_submission_id: duplicateSubmission.id,
+        });
+      }
+
+      const result = await dbClient.query(
+        `
+        INSERT INTO submissions(
+          user_id,
+          campaign_id,
+          page_id,
+          title,
+          platform,
+          post_url,
+          tiktok_video_id,
+          status,
+          audio_verified,
+          uploaded_at,
+          created_at
+        )
+        VALUES($1,$2,$3,$4,$5,$6,$7,'pending',false,now(),now())
+        RETURNING *
+        `,
+        [
+          userId,
+          campaign.id,
+          page.id,
+          `${campaign.title || 'Campaign'} - Submission`,
+          page.platform,
+          canonicalPostUrl,
+          page.platform === 'tiktok' ? String(contentId) : null,
+        ]
+      );
+
+      inserted = result.rows[0];
+      await dbClient.query('COMMIT');
+    } catch (transactionError) {
+      await dbClient.query('ROLLBACK').catch(() => {});
+      throw transactionError;
+    } finally {
+      dbClient.release();
+    }
+'''
+
+          if old not in text:
+              raise SystemExit('Could not locate submission insert block')
+
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+      - name: Commit safeguard and remove temporary patch files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/src/index.js
+          git rm -f .github/workflows/prevent-duplicate-submissions.yml
+          git rm -f .github/workflows/patch-metrics-button.yml || true
+          git rm -f .github/scripts/patch_metrics_button.py || true
+          git commit -m "Prevent duplicate posts in the same campaign"
+          git push
