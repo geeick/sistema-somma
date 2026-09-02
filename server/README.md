@@ -34,6 +34,7 @@ This server exposes:
 - `DELETE /api/pages/:id` — delete page owned by authenticated user
 - `GET /api/integrations/youtube/start` — create a Google authorization URL
 - `GET /api/integrations/youtube/callback` — verify and save the creator's YouTube channel
+- `GET /api/connected-content?page_id=...` — list posts/videos from the selected connected account
 - `GET /api/profile` — get profile for authenticated user
 - `GET /api/withdrawals` — list withdrawals for authenticated user
 - `POST /api/withdrawals` — request withdrawal
@@ -41,3 +42,5 @@ This server exposes:
 
 Notes
 - This is a scaffold: adapt SQL queries and add proper validation and authorization checks before using in production.
+- Apply `supabase/migrations/20260902000000_connected_social_content.sql` to the Neon database before deploying this version.
+- Existing YouTube pages must be connected once more so Google can issue the refresh token used to load channel videos.

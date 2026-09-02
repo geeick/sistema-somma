@@ -659,6 +659,309 @@ function requireYouTubeConfig() {
   return config;
 }
 
+async function exchangeInstagramLongLivedToken(shortLivedAccessToken) {
+  const clientSecret = String(process.env.INSTAGRAM_CLIENT_SECRET || '').trim();
+  if (!clientSecret) return null;
+
+  const params = new URLSearchParams({
+    grant_type: 'ig_exchange_token',
+    client_secret: clientSecret,
+    access_token: String(shortLivedAccessToken),
+  });
+  const response = await fetch(`https://graph.instagram.com/access_token?${params.toString()}`);
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !json.access_token) {
+    console.warn('Instagram long-lived token exchange failed; using the original token', json);
+    return null;
+  }
+
+  return json;
+}
+
+async function refreshInstagramAccessToken(accessToken) {
+  const params = new URLSearchParams({
+    grant_type: 'ig_refresh_token',
+    access_token: String(accessToken),
+  });
+  const response = await fetch(`https://graph.instagram.com/refresh_access_token?${params.toString()}`);
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !json.access_token) {
+    throw new Error(json.error?.message || json.message || 'Instagram token refresh failed');
+  }
+
+  return json;
+}
+
+async function getValidInstagramAccessTokenForPage(userId, pageId) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM instagram_connections
+    WHERE user_id::text = $1
+      AND page_id::text = $2
+    ORDER BY updated_at DESC
+    LIMIT 1
+    `,
+    [String(userId), String(pageId)]
+  );
+  const connection = result.rows[0];
+
+  if (!connection) {
+    throw new Error('Reconecte esta conta do Instagram para carregar suas publicações.');
+  }
+
+  const accessToken = decryptToken(connection.encrypted_access_token);
+  if (!accessToken) throw new Error('A conexão do Instagram está inválida. Reconecte a conta.');
+
+  const expiresAt = connection.token_expires_at
+    ? new Date(connection.token_expires_at).getTime()
+    : 0;
+
+  if (!expiresAt || expiresAt - Date.now() > 60_000) {
+    return { accessToken, connection };
+  }
+
+  const refreshed = await refreshInstagramAccessToken(accessToken);
+  const refreshedExpiresAt = new Date(
+    Date.now() + Number(refreshed.expires_in || 60 * 24 * 60 * 60) * 1000
+  );
+
+  await pool.query(
+    `
+    UPDATE instagram_connections
+    SET encrypted_access_token = $2,
+        token_expires_at = $3,
+        updated_at = now()
+    WHERE id = $1
+    `,
+    [connection.id, encryptToken(refreshed.access_token), refreshedExpiresAt]
+  );
+
+  return { accessToken: refreshed.access_token, connection };
+}
+
+function normalizeInstagramMedia(media) {
+  return {
+    id: String(media.id),
+    title: String(media.caption || '').trim() || 'Publicação do Instagram',
+    url: media.permalink || '',
+    thumbnail_url: media.thumbnail_url || media.media_url || null,
+    media_type: media.media_type || null,
+    published_at: media.timestamp || null,
+    view_count: numberOrNull(media.views),
+    like_count: numberOrNull(media.like_count),
+    comment_count: numberOrNull(media.comments_count),
+  };
+}
+
+async function listInstagramMedia(accessToken) {
+  const params = new URLSearchParams({
+    fields: 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,like_count,comments_count',
+    limit: '50',
+    access_token: String(accessToken),
+  });
+  const response = await fetch(`https://graph.instagram.com/me/media?${params.toString()}`);
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !Array.isArray(json.data)) {
+    throw new Error(json.error?.message || json.message || 'Instagram media list failed');
+  }
+
+  return json.data
+    .filter((media) => media?.id && media?.permalink)
+    .map(normalizeInstagramMedia);
+}
+
+async function getInstagramMedia(accessToken, mediaId) {
+  const params = new URLSearchParams({
+    fields: 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,like_count,comments_count',
+    access_token: String(accessToken),
+  });
+  const response = await fetch(
+    `https://graph.instagram.com/${encodeURIComponent(String(mediaId))}?${params.toString()}`
+  );
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !json.id || !json.permalink) {
+    throw new Error(json.error?.message || json.message || 'Instagram media lookup failed');
+  }
+
+  return normalizeInstagramMedia(json);
+}
+
+async function refreshYouTubeAccessToken(refreshToken) {
+  const config = requireYouTubeConfig();
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: String(config.clientId),
+      client_secret: String(config.clientSecret),
+      grant_type: 'refresh_token',
+      refresh_token: String(refreshToken),
+    }),
+  });
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !json.access_token) {
+    throw new Error(json.error_description || json.error || json.message || 'YouTube token refresh failed');
+  }
+
+  return json;
+}
+
+async function getValidYouTubeAccessTokenForPage(userId, pageId) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM youtube_connections
+    WHERE user_id::text = $1
+      AND page_id::text = $2
+    ORDER BY updated_at DESC
+    LIMIT 1
+    `,
+    [String(userId), String(pageId)]
+  );
+  const connection = result.rows[0];
+
+  if (!connection) {
+    throw new Error('Reconecte este canal do YouTube para carregar seus vídeos.');
+  }
+
+  const accessToken = decryptToken(connection.encrypted_access_token);
+  const expiresAt = connection.access_token_expires_at
+    ? new Date(connection.access_token_expires_at).getTime()
+    : 0;
+
+  if (accessToken && (!expiresAt || expiresAt - Date.now() > 60_000)) {
+    return { accessToken, connection };
+  }
+
+  const refreshToken = decryptToken(connection.encrypted_refresh_token);
+  if (!refreshToken) {
+    throw new Error('Reconecte o YouTube para autorizar o carregamento de vídeos.');
+  }
+
+  const refreshed = await refreshYouTubeAccessToken(refreshToken);
+  const refreshedExpiresAt = new Date(Date.now() + Number(refreshed.expires_in || 3600) * 1000);
+
+  await pool.query(
+    `
+    UPDATE youtube_connections
+    SET encrypted_access_token = $2,
+        access_token_expires_at = $3,
+        scopes = COALESCE($4, scopes),
+        updated_at = now()
+    WHERE id = $1
+    `,
+    [connection.id, encryptToken(refreshed.access_token), refreshedExpiresAt, refreshed.scope || null]
+  );
+
+  return { accessToken: refreshed.access_token, connection };
+}
+
+async function getYouTubeUploadsPlaylist(accessToken, connection) {
+  if (connection.uploads_playlist_id) return connection.uploads_playlist_id;
+
+  const params = new URLSearchParams({
+    part: 'contentDetails',
+    id: String(connection.channel_id),
+  });
+  const response = await fetch(`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const json = await readJsonResponse(response);
+  const playlistId = json.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+
+  if (!response.ok || !playlistId) {
+    throw new Error(json.error?.message || 'Não foi possível encontrar os vídeos deste canal.');
+  }
+
+  await pool.query(
+    'UPDATE youtube_connections SET uploads_playlist_id = $2, updated_at = now() WHERE id = $1',
+    [connection.id, playlistId]
+  );
+
+  return playlistId;
+}
+
+function normalizeYouTubeVideo(video) {
+  const videoId = String(video.id);
+  const thumbnails = video.snippet?.thumbnails || {};
+  return {
+    id: videoId,
+    title: video.snippet?.title || `Vídeo do YouTube ${videoId}`,
+    url: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`,
+    thumbnail_url: thumbnails.maxres?.url || thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || null,
+    media_type: 'VIDEO',
+    published_at: video.snippet?.publishedAt || null,
+    view_count: numberOrNull(video.statistics?.viewCount),
+    like_count: numberOrNull(video.statistics?.likeCount),
+    comment_count: numberOrNull(video.statistics?.commentCount),
+  };
+}
+
+async function fetchYouTubeVideosByIds(accessToken, ids) {
+  if (ids.length === 0) return [];
+  const params = new URLSearchParams({
+    part: 'snippet,statistics,contentDetails',
+    id: ids.join(','),
+  });
+  const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !Array.isArray(json.items)) {
+    throw new Error(json.error?.message || 'Não foi possível carregar os vídeos do YouTube.');
+  }
+
+  return json.items.map(normalizeYouTubeVideo);
+}
+
+async function listYouTubeVideos(accessToken, connection) {
+  const playlistId = await getYouTubeUploadsPlaylist(accessToken, connection);
+  const params = new URLSearchParams({
+    part: 'contentDetails',
+    playlistId: String(playlistId),
+    maxResults: '50',
+  });
+  const response = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || !Array.isArray(json.items)) {
+    throw new Error(json.error?.message || 'Não foi possível carregar os vídeos do YouTube.');
+  }
+
+  const ids = json.items
+    .map((item) => item.contentDetails?.videoId)
+    .filter(Boolean);
+  return fetchYouTubeVideosByIds(accessToken, ids);
+}
+
+async function getYouTubeVideo(accessToken, connection, videoId) {
+  const videos = await fetchYouTubeVideosByIds(accessToken, [String(videoId)]);
+  const video = videos[0];
+
+  if (!video) throw new Error('O vídeo selecionado não foi encontrado no YouTube.');
+
+  const params = new URLSearchParams({ part: 'snippet', id: String(videoId) });
+  const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const json = await readJsonResponse(response);
+
+  if (!response.ok || json.items?.[0]?.snippet?.channelId !== connection.channel_id) {
+    throw new Error('O vídeo selecionado não pertence ao canal conectado.');
+  }
+
+  return video;
+}
+
 async function exchangeTikTokCodeForToken(code) {
   const config = requireTikTokConfig();
 
@@ -773,16 +1076,25 @@ async function getTikTokVideoIdFromUrl(url) {
   return videoId;
 }
 
-async function getValidTikTokAccessTokenForUser(userId) {
+async function getValidTikTokAccessTokenForUser(userId, pageId = null) {
+  const values = [String(userId)];
+  let pageFilter = '';
+
+  if (pageId) {
+    values.push(String(pageId));
+    pageFilter = 'AND page_id::text = $2';
+  }
+
   const result = await pool.query(
     `
     SELECT *
     FROM tiktok_connections
     WHERE user_id::text = $1
+      ${pageFilter}
     ORDER BY updated_at DESC
     LIMIT 1
     `,
-    [String(userId)]
+    values
   );
 
   const connection = result.rows[0];
@@ -834,6 +1146,20 @@ async function getValidTikTokAccessTokenForUser(userId) {
   return {
     accessToken: refreshed.access_token,
     connection,
+  };
+}
+
+function normalizeTikTokVideo(video) {
+  return {
+    id: String(video.id),
+    title: video.title || video.video_description || `Vídeo do TikTok ${video.id}`,
+    url: video.share_url || '',
+    thumbnail_url: video.cover_image_url || null,
+    media_type: 'VIDEO',
+    published_at: video.create_time || null,
+    view_count: numberOrNull(video.view_count),
+    like_count: numberOrNull(video.like_count),
+    comment_count: numberOrNull(video.comment_count),
   };
 }
 
@@ -925,6 +1251,69 @@ async function queryTikTokVideo(accessToken, videoId) {
   }
 
   return json.data?.videos?.[0] || null;
+}
+
+async function getOwnedVerifiedPage(userId, pageId) {
+  const result = await pool.query(
+    `
+    SELECT id, user_id, platform, handle, verified
+    FROM pages
+    WHERE id::text = $1
+      AND user_id::text = $2
+      AND verified IS TRUE
+    LIMIT 1
+    `,
+    [String(pageId), String(userId)]
+  );
+
+  if (!result.rows[0]) {
+    throw new Error('A página selecionada não está conectada ou não pertence a este usuário.');
+  }
+
+  return result.rows[0];
+}
+
+async function listConnectedContent(userId, page) {
+  if (page.platform === 'instagram') {
+    const { accessToken } = await getValidInstagramAccessTokenForPage(userId, page.id);
+    return listInstagramMedia(accessToken);
+  }
+
+  if (page.platform === 'youtube_shorts') {
+    const { accessToken, connection } = await getValidYouTubeAccessTokenForPage(userId, page.id);
+    return listYouTubeVideos(accessToken, connection);
+  }
+
+  if (page.platform === 'tiktok') {
+    const { accessToken } = await getValidTikTokAccessTokenForUser(userId, page.id);
+    const result = await listTikTokVideos(accessToken);
+    return result.videos.map(normalizeTikTokVideo);
+  }
+
+  throw new Error('Esta plataforma ainda não oferece seleção de conteúdo conectado.');
+}
+
+async function resolveConnectedContent(userId, page, contentId) {
+  if (page.platform === 'instagram') {
+    const { accessToken } = await getValidInstagramAccessTokenForPage(userId, page.id);
+    return getInstagramMedia(accessToken, contentId);
+  }
+
+  if (page.platform === 'youtube_shorts') {
+    const { accessToken, connection } = await getValidYouTubeAccessTokenForPage(userId, page.id);
+    return getYouTubeVideo(accessToken, connection, contentId);
+  }
+
+  if (page.platform === 'tiktok') {
+    const { accessToken } = await getValidTikTokAccessTokenForUser(userId, page.id);
+    const video = await queryTikTokVideo(accessToken, contentId);
+    if (!video?.id || !video?.share_url) {
+      throw new Error('O vídeo selecionado não foi encontrado na conta conectada do TikTok.');
+    }
+    return normalizeTikTokVideo(video);
+  }
+
+  throw new Error('Esta plataforma ainda não oferece seleção de conteúdo conectado.');
 }
 
 
@@ -1426,11 +1815,12 @@ app.post('/api/withdrawals', verifyToken, async (req, res) => {
 app.post('/api/submissions', verifyToken, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const { campaign_id, page_id, post_url, audio_url, tiktok_video_id } = req.body;
+    const { campaign_id, page_id, platform_content_id, tiktok_video_id } = req.body;
+    const contentId = platform_content_id || tiktok_video_id;
 
-    if (!campaign_id || !page_id || !post_url) {
+    if (!campaign_id || !page_id || !contentId) {
       return res.status(400).json({
-        error: 'Campaign, approved page, and post URL are required',
+        error: 'Campaign, connected page, and selected content are required',
       });
     }
 
@@ -1495,6 +1885,15 @@ app.post('/api/submissions', verifyToken, async (req, res) => {
       });
     }
 
+    const connectedContent = await resolveConnectedContent(userId, page, contentId);
+    const canonicalPostUrl = String(connectedContent?.url || '').trim();
+
+    if (!canonicalPostUrl) {
+      return res.status(400).json({
+        error: 'A plataforma não retornou um link válido para o conteúdo selecionado',
+      });
+    }
+
     const result = await pool.query(
       `
       INSERT INTO submissions(
@@ -1519,14 +1918,14 @@ app.post('/api/submissions', verifyToken, async (req, res) => {
         page.id,
         `${campaign.title || 'Campaign'} - Submission`,
         page.platform,
-        post_url,
-        tiktok_video_id || null,
+        canonicalPostUrl,
+        page.platform === 'tiktok' ? String(contentId) : null,
       ]
     );
 
     const inserted = result.rows[0];
 
-    sendSubmissionToGoogleSheet(post_url, campaign.title).catch((err) => {
+    sendSubmissionToGoogleSheet(canonicalPostUrl, campaign.title).catch((err) => {
       console.error('Google Sheet scraper enqueue failed', err);
     });
 
@@ -1762,7 +2161,12 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
       return res.status(400).send('Instagram token exchange failed');
     }
 
-    const accessToken = tokenJson.access_token;
+    const longLivedToken = await exchangeInstagramLongLivedToken(tokenJson.access_token);
+    const accessToken = longLivedToken?.access_token || tokenJson.access_token;
+    const tokenExpiresIn = Number(longLivedToken?.expires_in || tokenJson.expires_in || 0);
+    const tokenExpiresAt = tokenExpiresIn > 0
+      ? new Date(Date.now() + tokenExpiresIn * 1000)
+      : null;
     const profileUrl = process.env.INSTAGRAM_PROFILE_URL || 'https://graph.instagram.com/me';
 
     const profileResponse = await fetch(
@@ -1869,7 +2273,7 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
         created_at,
         updated_at
       )
-      VALUES($1, $2, $3, $4, $5, NULL, now(), now())
+      VALUES($1, $2, $3, $4, $5, $6, now(), now())
       ON CONFLICT(user_id, instagram_user_id)
       DO UPDATE SET
         page_id = EXCLUDED.page_id,
@@ -1884,6 +2288,7 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
         String(profileJson.id),
         String(profileJson.username),
         encryptToken(accessToken),
+        tokenExpiresAt,
       ]
     );
 
@@ -1896,8 +2301,8 @@ app.get('/api/integrations/instagram/callback', async (req, res) => {
 
 
 // YouTube OAuth routes.
-// Google verifies ownership of the selected YouTube channel. Somma uses the
-// short-lived access token only during the callback and does not persist it.
+// Google verifies ownership of the selected YouTube channel. Tokens are kept
+// encrypted on the server so Somma can later show content from that channel.
 app.get('/api/integrations/youtube/start', verifyToken, async (req, res) => {
   try {
     const config = requireYouTubeConfig();
@@ -1913,7 +2318,8 @@ app.get('/api/integrations/youtube/start', verifyToken, async (req, res) => {
       scope: config.scopes,
       state,
       include_granted_scopes: 'true',
-      prompt: 'select_account',
+      access_type: 'offline',
+      prompt: 'consent select_account',
     });
 
     res.json({
@@ -1978,7 +2384,7 @@ app.get('/api/integrations/youtube/callback', async (req, res) => {
     }
 
     const channelResponse = await fetch(
-      'https://www.googleapis.com/youtube/v3/channels?part=id,snippet,statistics&mine=true',
+      'https://www.googleapis.com/youtube/v3/channels?part=id,snippet,statistics,contentDetails&mine=true',
       {
         headers: {
           Authorization: `Bearer ${tokenJson.access_token}`,
@@ -2084,6 +2490,51 @@ app.get('/api/integrations/youtube/callback', async (req, res) => {
     if (!page) {
       throw new Error('Não foi possível salvar o canal verificado do YouTube.');
     }
+
+    const accessTokenExpiresAt = new Date(
+      Date.now() + Number(tokenJson.expires_in || 3600) * 1000
+    );
+    const uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads || null;
+
+    await pool.query(
+      `
+      INSERT INTO youtube_connections(
+        user_id,
+        page_id,
+        channel_id,
+        channel_title,
+        uploads_playlist_id,
+        encrypted_access_token,
+        encrypted_refresh_token,
+        access_token_expires_at,
+        scopes,
+        created_at,
+        updated_at
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())
+      ON CONFLICT(user_id, channel_id)
+      DO UPDATE SET
+        page_id = EXCLUDED.page_id,
+        channel_title = EXCLUDED.channel_title,
+        uploads_playlist_id = EXCLUDED.uploads_playlist_id,
+        encrypted_access_token = EXCLUDED.encrypted_access_token,
+        encrypted_refresh_token = COALESCE(EXCLUDED.encrypted_refresh_token, youtube_connections.encrypted_refresh_token),
+        access_token_expires_at = EXCLUDED.access_token_expires_at,
+        scopes = EXCLUDED.scopes,
+        updated_at = now()
+      `,
+      [
+        userId,
+        page.id,
+        channelId,
+        channelTitle,
+        uploadsPlaylistId,
+        encryptToken(tokenJson.access_token),
+        tokenJson.refresh_token ? encryptToken(tokenJson.refresh_token) : null,
+        accessTokenExpiresAt,
+        tokenJson.scope || completeConfig.scopes,
+      ]
+    );
 
     return res.redirect(`${completeConfig.frontendBaseUrl}/pages?youtube=connected`);
   } catch (err) {
@@ -2918,8 +3369,8 @@ app.get('/api/admin/google-sheets-metrics', verifyToken, requireAdmin, async (_r
 
 app.get('/api/tiktok/videos', verifyToken, async (req, res) => {
   try {
-    const { cursor } = req.query;
-    const { accessToken } = await getValidTikTokAccessTokenForUser(req.user.sub);
+    const { cursor, page_id } = req.query;
+    const { accessToken } = await getValidTikTokAccessTokenForUser(req.user.sub, page_id || null);
     const result = await listTikTokVideos(accessToken, cursor || null);
 
     res.json({
@@ -2931,6 +3382,27 @@ app.get('/api/tiktok/videos', verifyToken, async (req, res) => {
     console.error('TikTok videos error', err);
     res.status(500).json({
       error: 'Failed to load TikTok videos',
+      details: err.message,
+    });
+  }
+});
+
+app.get('/api/connected-content', verifyToken, async (req, res) => {
+  try {
+    const pageId = String(req.query.page_id || '').trim();
+
+    if (!pageId) {
+      return res.status(400).json({ error: 'Selecione uma página conectada.' });
+    }
+
+    const page = await getOwnedVerifiedPage(req.user.sub, pageId);
+    const content = await listConnectedContent(req.user.sub, page);
+
+    return res.json({ data: content });
+  } catch (err) {
+    console.error('Connected content error', err);
+    return res.status(500).json({
+      error: 'Não foi possível carregar o conteúdo da conta conectada.',
       details: err.message,
     });
   }
