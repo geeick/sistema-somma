@@ -242,18 +242,49 @@ async function requireAdmin(req, res, next) {
   }
 }
 
+function cleanArrayItem(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/^[\s"'{\[]+/, '')
+    .replace(/[\s"'}\]]+$/, '')
+    .trim();
+}
+
 function normalizeArray(value) {
-  if (Array.isArray(value)) return value;
-  if (value === null || value === undefined || value === '') return [];
-  if (typeof value === 'string') {
+  let items = [];
+
+  if (Array.isArray(value)) {
+    items = value;
+  } else if (value !== null && value !== undefined && value !== '' && typeof value === 'string') {
+    const trimmed = value.trim();
+
     try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed;
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) items = parsed;
     } catch (_err) {
-      return value.split(',').map((item) => item.trim()).filter(Boolean);
+      const withoutOuterBraces = trimmed.replace(/^\{(.*)\}$/, '$1');
+      items = withoutOuterBraces.split(',');
     }
   }
-  return [];
+
+  return items.map(cleanArrayItem).filter(Boolean);
+}
+
+function normalizePlatform(value) {
+  const normalized = cleanArrayItem(value)
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+
+  if (normalized === 'tik_tok') return 'tiktok';
+  if (['youtube', 'youtube_short', 'youtube_shorts'].includes(normalized)) {
+    return 'youtube_shorts';
+  }
+
+  return normalized;
+}
+
+function normalizePlatformList(value) {
+  return [...new Set(normalizeArray(value).map(normalizePlatform).filter(Boolean))];
 }
 
 function normalizeOAuthTags(value) {
@@ -1872,16 +1903,15 @@ app.post('/api/submissions', verifyToken, async (req, res) => {
       });
     }
 
-    const allowedPlatforms = Array.isArray(campaign.platforms)
-      ? campaign.platforms
-      : normalizeArray(campaign.platforms);
+    const allowedPlatforms = normalizePlatformList(campaign.platforms);
+    const pagePlatform = normalizePlatform(page.platform);
 
     if (
       allowedPlatforms.length > 0 &&
-      !allowedPlatforms.includes(page.platform)
+      !allowedPlatforms.includes(pagePlatform)
     ) {
       return res.status(400).json({
-        error: `This campaign does not accept ${page.platform} submissions`,
+        error: `Esta campanha não aceita envios de ${pagePlatform}`,
       });
     }
 
@@ -2976,7 +3006,7 @@ app.post('/api/admin/campaigns', verifyToken, requireAdmin, async (req, res) => 
         dateOrNull(start_date),
         end_date,
         normalizeArray(required_tags),
-        normalizeArray(platforms),
+        normalizePlatformList(platforms),
         audio_url || null,
         normalizeJsonObject(audio_urls),
         normalizeJsonObject(example_urls),
@@ -3045,7 +3075,7 @@ app.put('/api/admin/campaigns/:id', verifyToken, requireAdmin, async (req, res) 
         dateOrNull(start_date),
         dateOrNull(end_date),
         normalizeArray(required_tags),
-        normalizeArray(platforms),
+        normalizePlatformList(platforms),
         audio_url || null,
         normalizeJsonObject(audio_urls),
         normalizeJsonObject(example_urls),

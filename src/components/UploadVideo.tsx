@@ -74,6 +74,25 @@ function normalizePlatform(platform?: string | null) {
   return labels[platform] || platform.replace("_", " ");
 }
 
+function normalizeCampaignPlatforms(value: unknown) {
+  return Array.from(
+    new Set(
+      normalizeStringList(value)
+        .map((item) => {
+          const normalized = item.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+          if (normalized === "tik_tok") return "tiktok";
+          if (["youtube", "youtube_short", "youtube_shorts"].includes(normalized)) {
+            return "youtube_shorts";
+          }
+
+          return normalized;
+        })
+        .filter(Boolean),
+    ),
+  );
+}
+
 function formatCount(value: number | null | undefined) {
   const count = Number(value || 0);
   return count.toLocaleString("pt-BR");
@@ -119,7 +138,7 @@ export const UploadVideo = ({
 
   const selectedContent = connectedContent.find((content) => content.id === selectedContentId) || null;
   const selectedCampaignRequiredTags = normalizeStringList(selectedCampaignData?.required_tags);
-  const selectedCampaignPlatforms = normalizeStringList(selectedCampaignData?.platforms);
+  const selectedCampaignPlatforms = normalizeCampaignPlatforms(selectedCampaignData?.platforms);
 
   const approvedPages = pages.filter((page) => {
     if (!platform) return false;
@@ -129,7 +148,7 @@ export const UploadVideo = ({
   const allowedCampaigns = campaigns.filter((campaign) => {
     if (!platform) return true;
 
-    const allowedPlatforms = normalizeStringList(campaign.platforms);
+    const allowedPlatforms = normalizeCampaignPlatforms(campaign.platforms);
     return allowedPlatforms.length === 0 || allowedPlatforms.includes(platform);
   });
 
@@ -247,7 +266,7 @@ export const UploadVideo = ({
     if (fixedCampaignId || !platform || !selectedCampaign) return;
 
     const campaign = campaigns.find((item) => item.id === selectedCampaign);
-    const allowedPlatforms = normalizeStringList(campaign?.platforms);
+    const allowedPlatforms = normalizeCampaignPlatforms(campaign?.platforms);
 
     if (allowedPlatforms.length > 0 && !allowedPlatforms.includes(platform)) {
       setSelectedCampaign("");
@@ -311,7 +330,7 @@ export const UploadVideo = ({
         return;
       }
 
-      const allowedPlatforms = normalizeStringList(campaign?.platforms);
+      const allowedPlatforms = normalizeCampaignPlatforms(campaign?.platforms);
 
       if (
         allowedPlatforms.length > 0 &&
