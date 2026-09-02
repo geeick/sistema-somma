@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start:api": "node server/src/index.js"
+    "start:api": "node --require ./server/src/metrics-auto-sync.cjs server/src/index.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -65,7 +65,6 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.61.1",
     "react-resizable-panels": "^2.1.9",
-    "react-router-dom": "^6.30.3",
     "recharts": "^2.15.4",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
