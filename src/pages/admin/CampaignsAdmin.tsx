@@ -339,7 +339,7 @@ export default function CampaignsAdmin() {
           {campaigns.map((campaign) => {
             const totalPayout = asNumber(campaign.total_payout);
             const budget = asNumber(campaign.budget);
-            const remainingBudget = budget - totalPayout;
+            const remainingBudget = Math.max(0, budget - totalPayout);
             const platforms = normalizeList(campaign.platforms);
             const requiredTags = normalizeList(campaign.required_tags);
             const status = campaign.status || 'unknown';
@@ -376,7 +376,7 @@ export default function CampaignsAdmin() {
                         <span className="text-muted-foreground">
                           {formatNumber(campaign.total_views)} visualizações
                         </span>
-                        <span className={remainingBudget < 0 ? 'text-destructive font-medium' : 'text-green-600 font-medium'}>
+                        <span className="text-green-600 font-medium">
                           Restante: {formatMoney(remainingBudget)}
                         </span>
                       </div>
