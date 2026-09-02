@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { getNeonAccessToken, getNeonUser, type NeonUser } from "@/lib/auth";
@@ -12,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import {
   Instagram,
-  Play,
   Youtube,
   Plus,
   Trash2,
@@ -21,8 +21,8 @@ import {
   ShieldAlert,
   Sparkles,
   UsersRound,
+  ChevronRight,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 interface Page {
   id: string;
@@ -52,9 +52,22 @@ const availableTags = [
   "Letras",
 ];
 
-const platformIcons: Record<string, LucideIcon> = {
+function TikTokIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 1 1-2.5-2.86v-3.5a6.33 6.33 0 1 0 5.95 6.32V8.71a8.16 8.16 0 0 0 4.77 1.52V6.79c-.33 0-.66-.03-1-.1Z" />
+    </svg>
+  );
+}
+
+const platformIcons: Record<string, ComponentType<{ className?: string }>> = {
   instagram: Instagram,
-  tiktok: Play,
+  tiktok: TikTokIcon,
   youtube_shorts: Youtube,
 };
 
@@ -307,28 +320,40 @@ const PagesPro = () => {
     provider: "instagram" | "tiktok" | "youtube",
     title: string,
     description: string,
-    icon: React.ReactNode,
+    ctaLabel: string,
+    icon: ReactNode,
     iconClassName: string
   ) => (
     <button
       type="button"
-      className="w-full text-left disabled:cursor-not-allowed disabled:opacity-60"
+      className="group w-full rounded-2xl text-left outline-none transition-transform disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-[0.995]"
       disabled={isConnecting}
       onClick={() => connectPlatform(provider)}
-      aria-label={title}
+      aria-label={ctaLabel}
     >
-      <Card className="somma-panel rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-        <CardContent className="p-5 flex gap-4 items-start">
-          <div
-            className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${iconClassName}`}
-          >
-            {icon}
-          </div>
-          <div className="flex-1">
-            <p className="font-extrabold">
-              {isConnecting ? "Conectando..." : title}
-            </p>
-            <p className="ui-caption mt-1">{description}</p>
+      <Card className="somma-panel rounded-2xl cursor-pointer border-2 border-primary/15 bg-card/95 shadow-sm transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/55 group-hover:bg-primary/[0.025] group-hover:shadow-lg">
+        <CardContent className="p-5">
+          <div className="flex gap-4 items-start">
+            <div
+              className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${iconClassName}`}
+            >
+              {icon}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-extrabold text-foreground">{title}</p>
+                  <p className="ui-caption mt-1 leading-relaxed">{description}</p>
+                </div>
+                <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
+              </div>
+
+              <div className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-extrabold text-primary-foreground shadow-sm transition-transform group-hover:translate-x-0.5">
+                {isConnecting ? "Conectando..." : ctaLabel}
+                {!isConnecting && <ChevronRight className="h-4 w-4" />}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -414,6 +439,7 @@ const PagesPro = () => {
                           "instagram",
                           "Verifique sua conta do Instagram",
                           "Você será direcionado ao Instagram. Depois da autorização, a Somma salva automaticamente seu usuário, URL e status de verificação.",
+                          "Conectar Instagram",
                           <Instagram className="h-5 w-5" />,
                           "bg-pink-50 text-pink-700"
                         )}
@@ -427,8 +453,9 @@ const PagesPro = () => {
                           "tiktok",
                           "Verifique sua conta do TikTok",
                           "Você será direcionado ao TikTok para autorizar a Somma. Depois da autorização, a conta será adicionada automaticamente como página verificada.",
-                          <Play className="h-5 w-5" />,
-                          "bg-foreground text-background"
+                          "Conectar TikTok",
+                          <TikTokIcon className="h-6 w-6" />,
+                          "bg-neutral-950 text-white"
                         )}
                         {tagPicker}
                       </div>
@@ -440,6 +467,7 @@ const PagesPro = () => {
                           "youtube",
                           "Verifique seu canal do YouTube",
                           "Você será direcionado ao Google para escolher a conta. A Somma salvará automaticamente o canal, o link, o número público de inscritos e o status de verificação.",
+                          "Conectar YouTube",
                           <Youtube className="h-5 w-5" />,
                           "bg-red-50 text-red-700"
                         )}
