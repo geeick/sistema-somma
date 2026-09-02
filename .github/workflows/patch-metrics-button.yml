@@ -1,0 +1,361 @@
+name: Patch metrics button to platform APIs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-metrics-button.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch frontend and API route
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          frontend_path = Path('src/pages/admin/SubmissionsAdmin.tsx')
+          frontend = frontend_path.read_text()
+
+          frontend = frontend.replace(
+          '''const metricsSourceLabels: Record<string, string> = {
+            scraper: "Coleta automática",
+            manual: "Entrada manual",
+          };''',
+          '''const metricsSourceLabels: Record<string, string> = {
+            scraper: "Coleta automática",
+            google_sheets: "Google Sheets",
+            instagram_graph_api: "Instagram API",
+            instagram_graph_api_basic: "Instagram API",
+            tiktok_display_api: "TikTok API",
+            youtube_data_api: "YouTube API",
+            manual: "Entrada manual",
+          };'''
+          )
+
+          old_button = '''                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isUpdatingId === submission.id}
+                            onClick={() => syncMetrics(submission.id)}
+                          >
+                            Sincronizar métricas
+                          </Button>'''
+
+          new_button = '''                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isUpdatingId === submission.id}
+                            onClick={() => syncMetrics(submission.id)}
+                            title="Buscar as métricas mais recentes diretamente da API da plataforma"
+                          >
+                            {isUpdatingId === submission.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                Atualizando...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-1" />
+                                Atualizar agora
+                              </>
+                            )}
+                          </Button>'''
+
+          if old_button not in frontend:
+              raise SystemExit('Could not find old metrics button')
+          frontend = frontend.replace(old_button, new_button, 1)
+          frontend_path.write_text(frontend)
+
+          backend_path = Path('server/src/index.js')
+          backend = backend_path.read_text()
+
+          route_pattern = re.compile(
+              r"app\.post\('/api/admin/submissions/:id/sync-metrics', verifyToken, requireAdmin, async \(req, res\) => \{.*?\n\}\);\n\n(?=app\.get\('/api/admin/google-sheets-metrics')",
+              re.S,
+          )
+
+          new_route = r'''app.post('/api/admin/submissions/:id/sync-metrics', verifyToken, requireAdmin, async (req, res) => {
+            try {
+              const submissionResult = await pool.query(
+                `
+                SELECT
+                  s.id,
+                  s.user_id,
+                  s.page_id,
+                  s.post_url,
+                  s.platform,
+                  s.tiktok_video_id
+                FROM submissions s
+                WHERE s.id = $1
+                LIMIT 1
+                `,
+                [req.params.id]
+              );
+
+              const submission = submissionResult.rows[0];
+
+              if (!submission) {
+                return res.status(404).json({ error: 'Submission not found' });
+              }
+
+              const platform = normalizePlatform(submission.platform);
+
+              if (platform === 'tiktok') {
+                let videoId = submission.tiktok_video_id || '';
+
+                if (!videoId && submission.post_url) {
+                  videoId = await getTikTokVideoIdFromUrl(submission.post_url);
+                }
+
+                if (!videoId) {
+                  return res.status(400).json({
+                    error: 'Could not find TikTok video ID from URL',
+                  });
+                }
+
+                const { accessToken, connection } = await getValidTikTokAccessTokenForUser(
+                  submission.user_id,
+                  submission.page_id || null
+                );
+                const video = await queryTikTokVideo(accessToken, videoId);
+
+                if (!video) {
+                  return res.status(404).json({
+                    error: 'TikTok video not found for connected creator',
+                  });
+                }
+
+                const views = Number(video.view_count || 0);
+                const likes = Number(video.like_count || 0);
+                const comments = Number(video.comment_count || 0);
+                const shares = Number(video.share_count || 0);
+                const payout = computePayoutFromPlays(views);
+
+                const updateResult = await pool.query(
+                  `
+                  UPDATE submissions
+                  SET
+                    tiktok_video_id = $2,
+                    username = $3,
+                    likes_count = $4,
+                    views_count = $5,
+                    comments_count = $6,
+                    shares_count = $7,
+                    payment_amount = $8,
+                    metrics_synced_at = now(),
+                    metrics_source = 'tiktok_display_api'
+                  WHERE id = $1
+                  RETURNING *
+                  `,
+                  [
+                    submission.id,
+                    String(video.id || videoId),
+                    connection.display_name || null,
+                    likes,
+                    views,
+                    comments,
+                    shares,
+                    payout,
+                  ]
+                );
+
+                return res.json({ data: updateResult.rows[0] });
+              }
+
+              if (platform === 'instagram') {
+                if (!submission.page_id || !submission.post_url) {
+                  return res.status(400).json({
+                    error: 'Instagram submission is missing its connected page or post URL',
+                  });
+                }
+
+                const { accessToken, connection } = await getValidInstagramAccessTokenForPage(
+                  submission.user_id,
+                  submission.page_id
+                );
+
+                const mediaList = await listInstagramMedia(accessToken);
+                const media = mediaList.find((item) => urlsMatch(item.url, submission.post_url));
+
+                if (!media) {
+                  return res.status(404).json({
+                    error: 'Instagram post not found in the connected creator account',
+                    details: 'Reconecte a conta se a publicação não aparecer mais na lista da API.',
+                  });
+                }
+
+                const readInsight = async (metric) => {
+                  const params = new URLSearchParams({
+                    metric,
+                    access_token: String(accessToken),
+                  });
+                  const response = await fetch(
+                    `https://graph.instagram.com/${encodeURIComponent(String(media.id))}/insights?${params.toString()}`
+                  );
+                  const json = await readJsonResponse(response);
+
+                  if (!response.ok || !Array.isArray(json.data) || !json.data[0]) {
+                    return null;
+                  }
+
+                  const entry = json.data[0];
+                  const value =
+                    entry.total_value?.value ??
+                    (Array.isArray(entry.values) ? entry.values[0]?.value : null);
+                  const parsed = Number(value);
+                  return Number.isFinite(parsed) ? parsed : null;
+                };
+
+                let views = await readInsight('views');
+                if (views === null) views = await readInsight('plays');
+                const shares = await readInsight('shares');
+
+                const likes = Number(media.like_count || 0);
+                const comments = Number(media.comment_count || 0);
+                const payout = views === null ? null : computePayoutFromPlays(views);
+                const source = views === null
+                  ? 'instagram_graph_api_basic'
+                  : 'instagram_graph_api';
+
+                const updateResult = await pool.query(
+                  `
+                  UPDATE submissions
+                  SET
+                    username = COALESCE($2, username),
+                    likes_count = $3,
+                    views_count = COALESCE($4::bigint, views_count),
+                    comments_count = $5,
+                    shares_count = COALESCE($6::bigint, shares_count),
+                    payment_amount = CASE
+                      WHEN $7::numeric IS NULL THEN payment_amount
+                      ELSE $7::numeric
+                    END,
+                    metrics_synced_at = now(),
+                    metrics_source = $8
+                  WHERE id = $1
+                  RETURNING *
+                  `,
+                  [
+                    submission.id,
+                    connection.instagram_username || null,
+                    likes,
+                    views,
+                    comments,
+                    shares,
+                    payout,
+                    source,
+                  ]
+                );
+
+                return res.json({ data: updateResult.rows[0] });
+              }
+
+              if (platform === 'youtube_shorts') {
+                if (!submission.page_id || !submission.post_url) {
+                  return res.status(400).json({
+                    error: 'YouTube submission is missing its connected channel or video URL',
+                  });
+                }
+
+                let videoId = '';
+                try {
+                  const url = new URL(submission.post_url);
+                  videoId = url.searchParams.get('v') || '';
+                  if (!videoId) {
+                    const shortMatch = url.pathname.match(/\/(?:shorts|embed)\/([^/?#]+)/i);
+                    if (shortMatch?.[1]) videoId = shortMatch[1];
+                  }
+                  if (!videoId && url.hostname.includes('youtu.be')) {
+                    videoId = url.pathname.split('/').filter(Boolean)[0] || '';
+                  }
+                } catch (_err) {
+                  const match = String(submission.post_url).match(
+                    /(?:v=|youtu\.be\/|shorts\/|embed\/)([^&#?/]+)/i
+                  );
+                  videoId = match?.[1] || '';
+                }
+
+                if (!videoId) {
+                  return res.status(400).json({ error: 'Could not determine YouTube video ID' });
+                }
+
+                const { accessToken, connection } = await getValidYouTubeAccessTokenForPage(
+                  submission.user_id,
+                  submission.page_id
+                );
+                const video = await getYouTubeVideo(accessToken, connection, videoId);
+
+                const views = Number(video.view_count || 0);
+                const likes = Number(video.like_count || 0);
+                const comments = Number(video.comment_count || 0);
+                const payout = computePayoutFromPlays(views);
+
+                const updateResult = await pool.query(
+                  `
+                  UPDATE submissions
+                  SET
+                    username = COALESCE($2, username),
+                    likes_count = $3,
+                    views_count = $4,
+                    comments_count = $5,
+                    payment_amount = $6,
+                    metrics_synced_at = now(),
+                    metrics_source = 'youtube_data_api'
+                  WHERE id = $1
+                  RETURNING *
+                  `,
+                  [
+                    submission.id,
+                    connection.channel_title || null,
+                    likes,
+                    views,
+                    comments,
+                    payout,
+                  ]
+                );
+
+                return res.json({ data: updateResult.rows[0] });
+              }
+
+              return res.status(400).json({
+                error: `Automatic API metrics are not supported for ${platform || 'this platform'}`,
+              });
+            } catch (err) {
+              console.error('Sync metrics error', err);
+              res.status(500).json({
+                error: 'Failed to sync metrics from platform API',
+                details: err.message,
+                code: err.code,
+              });
+            }
+          });
+
+'''
+
+          backend, count = route_pattern.subn(new_route, backend, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected to replace one sync route, replaced {count}')
+          backend_path.write_text(backend)
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/admin/SubmissionsAdmin.tsx server/src/index.js
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Use platform APIs for admin metric refresh"
+            git push
+          fi
