@@ -29,7 +29,7 @@ const submissionSchema = z.object({
   postUrl: z.string().trim().url("URL da publicação inválida").max(500, "A URL precisa ter menos de 500 caracteres"),
   platform: z.enum(["instagram", "tiktok", "youtube_shorts"]),
   audioUrl: z.string().trim().url("URL do áudio inválida").optional().or(z.literal("")),
-  tiktokVideoId: z.string().optional(),
+  contentId: z.string().min(1, "Selecione um conteúdo da conta conectada"),
 });
 
 interface Campaign {
@@ -51,17 +51,16 @@ interface Page {
   tags?: string[] | string | null;
 }
 
-interface TikTokVideo {
+interface ConnectedContent {
   id: string;
-  title?: string | null;
-  video_description?: string | null;
-  share_url?: string | null;
-  cover_image_url?: string | null;
+  title: string;
+  url: string;
+  thumbnail_url?: string | null;
+  media_type?: string | null;
   like_count?: number | null;
   comment_count?: number | null;
-  share_count?: number | null;
   view_count?: number | null;
-  create_time?: number | string | null;
+  published_at?: number | string | null;
 }
 
 function normalizePlatform(platform?: string | null) {
@@ -80,13 +79,17 @@ function formatCount(value: number | null | undefined) {
   return count.toLocaleString("pt-BR");
 }
 
-function getVideoLabel(video: TikTokVideo) {
-  return (
-    video.title ||
-    video.video_description ||
-    video.share_url ||
-    `Vídeo do TikTok ${video.id}`
-  );
+function getContentLabel(content: ConnectedContent) {
+  return content.title || content.url || `Conteúdo ${content.id}`;
+}
+
+function getContentNoun(platform: Page["platform"] | "") {
+  if (platform === "instagram") return "publicação";
+  return "vídeo";
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export const UploadVideo = ({
@@ -106,15 +109,15 @@ export const UploadVideo = ({
   const [postUrl, setPostUrl] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
 
-  const [tiktokVideos, setTikTokVideos] = useState<TikTokVideo[]>([]);
-  const [selectedTikTokVideoId, setSelectedTikTokVideoId] = useState("");
-  const [isLoadingTikTokVideos, setIsLoadingTikTokVideos] = useState(false);
+  const [connectedContent, setConnectedContent] = useState<ConnectedContent[]>([]);
+  const [selectedContentId, setSelectedContentId] = useState("");
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
 
   const selectedCampaignData =
     campaigns.find((campaign) => campaign.id === selectedCampaign) ||
     (fixedCampaignId && fixedCampaign?.id === fixedCampaignId ? (fixedCampaign as Campaign) : null);
 
-  const selectedTikTokVideo = tiktokVideos.find((video) => video.id === selectedTikTokVideoId) || null;
+  const selectedContent = connectedContent.find((content) => content.id === selectedContentId) || null;
   const selectedCampaignRequiredTags = normalizeStringList(selectedCampaignData?.required_tags);
   const selectedCampaignPlatforms = normalizeStringList(selectedCampaignData?.platforms);
 
@@ -160,10 +163,10 @@ export const UploadVideo = ({
     }
   };
 
-  const fetchTikTokVideos = async () => {
-    if (!userId) return;
+  const fetchConnectedContent = async (pageId = selectedPageId) => {
+    if (!userId || !pageId) return;
 
-    setIsLoadingTikTokVideos(true);
+    setIsLoadingContent(true);
 
     try {
       const token = await getNeonAccessToken();
@@ -172,7 +175,8 @@ export const UploadVideo = ({
         throw new Error("Token de login ausente. Saia e entre novamente.");
       }
 
-      const response = await fetch(`${API_BASE}/api/tiktok/videos`, {
+      const query = new URLSearchParams({ page_id: pageId });
+      const response = await fetch(`${API_BASE}/api/connected-content?${query.toString()}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -182,21 +186,21 @@ export const UploadVideo = ({
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || json.details || "Não foi possível carregar vídeos do TikTok");
+        throw new Error(json.details || json.error || "Não foi possível carregar o conteúdo da conta conectada");
       }
 
-      const videos = Array.isArray(json.data) ? json.data : [];
-      setTikTokVideos(videos);
+      const content = Array.isArray(json.data) ? json.data : [];
+      setConnectedContent(content);
 
-      if (videos.length === 0) {
-        toast.info("TikTok conectado, mas nenhum vídeo público foi retornado.");
+      if (content.length === 0) {
+        toast.info("A conta está conectada, mas nenhum conteúdo publicado foi retornado.");
       }
-    } catch (err: any) {
-      console.error("Erro nos vídeos do TikTok:", err);
-      toast.error(err.message || "Não foi possível carregar vídeos do TikTok");
-      setTikTokVideos([]);
+    } catch (err: unknown) {
+      console.error("Erro no conteúdo conectado:", err);
+      toast.error(getErrorMessage(err) || "Não foi possível carregar o conteúdo da conta conectada");
+      setConnectedContent([]);
     } finally {
-      setIsLoadingTikTokVideos(false);
+      setIsLoadingContent(false);
     }
   };
 
@@ -224,14 +228,20 @@ export const UploadVideo = ({
   useEffect(() => {
     setSelectedPageId("");
     setPostUrl("");
-    setSelectedTikTokVideoId("");
-    setTikTokVideos([]);
+    setSelectedContentId("");
+    setConnectedContent([]);
+  }, [platform]);
 
-    if (platform === "tiktok") {
-      fetchTikTokVideos();
+  useEffect(() => {
+    setPostUrl("");
+    setSelectedContentId("");
+    setConnectedContent([]);
+
+    if (selectedPageId) {
+      fetchConnectedContent(selectedPageId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform]);
+  }, [selectedPageId]);
 
   useEffect(() => {
     if (fixedCampaignId || !platform || !selectedCampaign) return;
@@ -251,11 +261,11 @@ export const UploadVideo = ({
     if (!stillAllowed) setSelectedPageId("");
   }, [approvedPages, selectedPageId]);
 
-  const handleTikTokVideoChange = (videoId: string) => {
-    setSelectedTikTokVideoId(videoId);
+  const handleContentChange = (contentId: string) => {
+    setSelectedContentId(contentId);
 
-    const video = tiktokVideos.find((item) => item.id === videoId);
-    const url = video?.share_url || "";
+    const content = connectedContent.find((item) => item.id === contentId);
+    const url = content?.url || "";
 
     if (url) {
       setPostUrl(url);
@@ -277,8 +287,8 @@ export const UploadVideo = ({
       return;
     }
 
-    if (platform === "tiktok" && !selectedTikTokVideoId) {
-      toast.error("Escolha um dos seus vídeos autorizados do TikTok.");
+    if (!selectedContentId) {
+      toast.error("Escolha um conteúdo da conta conectada.");
       return;
     }
 
@@ -289,7 +299,7 @@ export const UploadVideo = ({
         postUrl,
         platform,
         audioUrl: audioUrl || undefined,
-        tiktokVideoId: selectedTikTokVideoId || undefined,
+        contentId: selectedContentId,
       });
 
       setIsUploading(true);
@@ -320,9 +330,8 @@ export const UploadVideo = ({
         body: JSON.stringify({
           campaign_id: validated.campaignId,
           page_id: validated.pageId,
-          post_url: validated.postUrl,
           audio_url: validated.audioUrl || null,
-          tiktok_video_id: validated.tiktokVideoId || null,
+          platform_content_id: validated.contentId,
         }),
       });
 
@@ -342,14 +351,14 @@ export const UploadVideo = ({
       setSelectedPageId("");
       setPostUrl("");
       setAudioUrl("");
-      setSelectedTikTokVideoId("");
-      setTikTokVideos([]);
-    } catch (error: any) {
+      setSelectedContentId("");
+      setConnectedContent([]);
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
         console.error("Erro no envio:", error);
-        toast.error(error.message || "Não foi possível enviar");
+        toast.error(getErrorMessage(error) || "Não foi possível enviar");
       }
     } finally {
       setIsUploading(false);
@@ -482,16 +491,18 @@ export const UploadVideo = ({
             </div>
           )}
 
-          {platform === "tiktok" ? (
+          {platform && selectedPageId && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="tiktokVideo">Vídeo autorizado do TikTok *</Label>
+                <Label htmlFor="connectedContent">
+                  {getContentNoun(platform) === "publicação" ? "Publicação" : "Vídeo"} da conta conectada *
+                </Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={fetchTikTokVideos}
-                  disabled={isLoadingTikTokVideos}
+                  onClick={() => fetchConnectedContent()}
+                  disabled={isLoadingContent}
                   className="rounded-full"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
@@ -500,72 +511,78 @@ export const UploadVideo = ({
               </div>
 
               <Select
-                value={selectedTikTokVideoId}
-                onValueChange={handleTikTokVideoChange}
-                disabled={isLoadingTikTokVideos || tiktokVideos.length === 0}
+                value={selectedContentId}
+                onValueChange={handleContentChange}
+                disabled={isLoadingContent || connectedContent.length === 0}
                 required
               >
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
-                      isLoadingTikTokVideos
-                        ? "Carregando vídeos do TikTok..."
-                        : "Escolha um vídeo do TikTok conectado"
+                      isLoadingContent
+                        ? `Carregando conteúdo do ${normalizePlatform(platform)}...`
+                        : `Escolha ${getContentNoun(platform) === "publicação" ? "uma publicação" : "um vídeo"} da conta conectada`
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {tiktokVideos.length === 0 ? (
-                    <SelectItem value="_no_tiktok_videos" disabled>
-                      Nenhum vídeo do TikTok encontrado
+                  {connectedContent.length === 0 ? (
+                    <SelectItem value="_no_connected_content" disabled>
+                      Nenhum conteúdo publicado encontrado
                     </SelectItem>
                   ) : (
-                    tiktokVideos.map((video) => (
-                      <SelectItem key={video.id} value={video.id}>
-                        {getVideoLabel(video).slice(0, 80)}
+                    connectedContent.map((content) => (
+                      <SelectItem key={content.id} value={content.id}>
+                        {getContentLabel(content).slice(0, 80)}
                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
               </Select>
 
-              {selectedTikTokVideo && (
+              {selectedContent && (
                 <Card className="bg-muted/40">
                   <CardContent className="pt-4 space-y-3">
                     <div className="flex items-start gap-3">
-                      {selectedTikTokVideo.cover_image_url && (
+                      {selectedContent.thumbnail_url && (
                         <img
-                          src={selectedTikTokVideo.cover_image_url}
-                          alt="Capa do vídeo do TikTok"
+                          src={selectedContent.thumbnail_url}
+                          alt={`Capa do conteúdo de ${normalizePlatform(platform)}`}
                           className="h-20 w-20 rounded-md object-cover"
                         />
                       )}
 
                       <div className="min-w-0 flex-1 space-y-2">
                         <p className="font-medium line-clamp-2">
-                          {getVideoLabel(selectedTikTokVideo)}
+                          {getContentLabel(selectedContent)}
                         </p>
 
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant="secondary">
-                            {formatCount(selectedTikTokVideo.view_count)} visualizações
-                          </Badge>
-                          <Badge variant="secondary">
-                            {formatCount(selectedTikTokVideo.like_count)} curtidas
-                          </Badge>
-                          <Badge variant="secondary">
-                            {formatCount(selectedTikTokVideo.comment_count)} comentários
-                          </Badge>
+                          {selectedContent.view_count !== null && selectedContent.view_count !== undefined && (
+                            <Badge variant="secondary">
+                              {formatCount(selectedContent.view_count)} visualizações
+                            </Badge>
+                          )}
+                          {selectedContent.like_count !== null && selectedContent.like_count !== undefined && (
+                            <Badge variant="secondary">
+                              {formatCount(selectedContent.like_count)} curtidas
+                            </Badge>
+                          )}
+                          {selectedContent.comment_count !== null && selectedContent.comment_count !== undefined && (
+                            <Badge variant="secondary">
+                              {formatCount(selectedContent.comment_count)} comentários
+                            </Badge>
+                          )}
                         </div>
 
-                        {selectedTikTokVideo.share_url && (
+                        {selectedContent.url && (
                           <a
-                            href={selectedTikTokVideo.share_url}
+                            href={selectedContent.url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                           >
-                            Ver no TikTok
+                            Ver em {normalizePlatform(platform)}
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
@@ -576,22 +593,6 @@ export const UploadVideo = ({
               )}
 
               <Input type="hidden" value={postUrl} readOnly />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="postUrl">URL da publicação *</Label>
-              <Input
-                id="postUrl"
-                type="url"
-                placeholder="https://instagram.com/p/..."
-                value={postUrl}
-                onChange={(event) => setPostUrl(event.target.value)}
-                required
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground">
-                Esta URL precisa pertencer à página aprovada selecionada acima.
-              </p>
             </div>
           )}
 
@@ -621,7 +622,7 @@ export const UploadVideo = ({
               !platform ||
               !selectedPageId ||
               !postUrl ||
-              (platform === "tiktok" && !selectedTikTokVideoId)
+              !selectedContentId
             }
           >
             <Upload className="h-4 w-4 mr-2" />
