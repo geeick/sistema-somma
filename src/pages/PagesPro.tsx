@@ -455,7 +455,7 @@ const PagesPro = () => {
                           "Você será direcionado ao TikTok para autorizar a Somma. Depois da autorização, a conta será adicionada automaticamente como página verificada.",
                           "Conectar TikTok",
                           <TikTokIcon className="h-6 w-6" />,
-                          "bg-neutral-950 text-white"
+                          "bg-[#EAFBFD] text-[#14B8C4]"
                         )}
                         {tagPicker}
                       </div>
