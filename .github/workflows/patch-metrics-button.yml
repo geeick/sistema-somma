@@ -1,4 +1,4 @@
-name: Patch metrics button to platform APIs
+name: Apply backend safeguards
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/patch-metrics-button.yml
       - .github/scripts/patch_metrics_button.py
+      - .github/scripts/prevent_duplicate_submissions.py
 
 permissions:
   contents: write
@@ -18,17 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply patch
+      - name: Apply metrics patch
         run: python .github/scripts/patch_metrics_button.py
+
+      - name: Apply duplicate submission safeguard
+        run: python .github/scripts/prevent_duplicate_submissions.py
 
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/pages/admin/SubmissionsAdmin.tsx server/src/index.js
+          git add server/src/index.js src/pages/admin/SubmissionsAdmin.tsx
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Use platform APIs for admin metric refresh"
+            git commit -m "Prevent duplicate posts in the same campaign"
             git push
           fi
