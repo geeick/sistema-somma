@@ -4,8 +4,8 @@
   "private": true,
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon --watch src --ext js --exec node src/index.js"
+    "start": "node --require ./src/metrics-auto-sync.cjs src/index.js",
+    "dev": "nodemon --watch src --ext js,cjs --exec node --require ./src/metrics-auto-sync.cjs src/index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
