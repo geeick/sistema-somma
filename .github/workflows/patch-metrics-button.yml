@@ -1,4 +1,4 @@
-name: Apply backend safeguards
+name: Apply duplicate submission safeguard
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - .github/workflows/patch-metrics-button.yml
-      - .github/scripts/patch_metrics_button.py
       - .github/scripts/prevent_duplicate_submissions.py
 
 permissions:
@@ -19,9 +18,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply metrics patch
-        run: python .github/scripts/patch_metrics_button.py
-
       - name: Apply duplicate submission safeguard
         run: python .github/scripts/prevent_duplicate_submissions.py
 
@@ -29,7 +25,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/src/index.js src/pages/admin/SubmissionsAdmin.tsx
+          git add server/src/index.js
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
