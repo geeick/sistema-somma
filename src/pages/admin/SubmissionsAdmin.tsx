@@ -174,6 +174,11 @@ const statusLabels: Record<string, string> = {
 
 const metricsSourceLabels: Record<string, string> = {
   scraper: "Coleta automática",
+  google_sheets: "Google Sheets",
+  instagram_graph_api: "Instagram API",
+  instagram_graph_api_basic: "Instagram API",
+  tiktok_display_api: "TikTok API",
+  youtube_data_api: "YouTube API",
   manual: "Entrada manual",
 };
 
@@ -667,8 +672,19 @@ export default function SubmissionsAdmin() {
                             size="sm"
                             disabled={isUpdatingId === submission.id}
                             onClick={() => syncMetrics(submission.id)}
+                            title="Buscar as métricas mais recentes diretamente da API da plataforma"
                           >
-                            Sincronizar métricas
+                            {isUpdatingId === submission.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                Atualizando...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-1" />
+                                Atualizar agora
+                              </>
+                            )}
                           </Button>
 
                           <Button
