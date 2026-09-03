@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getNeonAccessToken } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/LoadingState";
 import { BarChart3, FileVideo, Megaphone, RefreshCw, ShieldAlert, Users, Wallet, Sparkles } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -92,7 +93,7 @@ const AdminDashboard = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen somma-shell flex items-center justify-center">
-        <p className="font-semibold text-muted-foreground">Carregando painel administrativo...</p>
+        <LoadingState label="Carregando painel administrativo..." />
       </div>
     );
   }

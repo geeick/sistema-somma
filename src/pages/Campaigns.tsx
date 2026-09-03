@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { Navbar } from "@/components/Navbar";
+import { LoadingState } from "@/components/LoadingState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -65,7 +66,7 @@ const Campaigns = () => {
       <div className="min-h-screen somma-shell">
         <Navbar />
         <div className="container mx-auto px-4 pt-28 pb-12">
-          <p className="text-center text-muted-foreground font-semibold">Carregando campanhas...</p>
+          <LoadingState label="Carregando campanhas..." className="mx-auto" />
         </div>
       </div>
     );

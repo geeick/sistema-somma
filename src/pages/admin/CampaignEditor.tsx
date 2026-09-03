@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingState } from "@/components/LoadingState";
 import { ArrowLeft, AlertTriangle, Loader2, Save } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -420,8 +421,11 @@ export default function CampaignEditor() {
         <Card className="bg-gradient-card border-border">
           <CardHeader>
             <CardTitle>{titleText}</CardTitle>
-            <CardDescription>Carregando informações da campanha...</CardDescription>
+            <CardDescription>Aguarde enquanto preparamos o editor.</CardDescription>
           </CardHeader>
+          <CardContent>
+            <LoadingState label="Carregando informações da campanha..." compact />
+          </CardContent>
         </Card>
       </div>
     );

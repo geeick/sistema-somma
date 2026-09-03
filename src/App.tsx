@@ -26,6 +26,7 @@ import TagsAdmin from "./pages/admin/TagsAdmin";
 import SettingsAdmin from "./pages/admin/SettingsAdmin";
 import ErrorsAdmin from "./pages/admin/ErrorsAdmin";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { LoadingState } from "@/components/LoadingState";
 import { SiteFooter } from "@/components/SiteFooter";
 
 const queryClient = new QueryClient();
@@ -89,7 +90,7 @@ function AdminRedirect({ children, requireAuth = false }: { children: ReactNode;
   if (isChecking) {
     return (
       <div className="min-h-screen somma-shell flex items-center justify-center">
-        <p className="text-muted-foreground font-semibold">Carregando...</p>
+        <LoadingState />
       </div>
     );
   }

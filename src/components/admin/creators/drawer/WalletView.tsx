@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingState } from '@/components/LoadingState';
 
 interface Ledger {
   id: string;
@@ -54,7 +55,7 @@ export function WalletView({ userId }: { userId: string }) {
     }
   };
 
-  if (loading) return <div className="text-center py-4">Loading...</div>;
+  if (loading) return <LoadingState label="Carregando carteira..." compact />;
 
   return (
     <div className="space-y-4">

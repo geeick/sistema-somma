@@ -68,6 +68,8 @@
       linear-gradient(180deg, hsl(40 72% 97%), hsl(36 43% 89%));
     line-height: 1.55;
     font-weight: 500;
+    background-size: 120% 120%, 125% 125%, 100% 100%;
+    animation: somma-background-drift 24s ease-in-out infinite alternate;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -173,10 +175,70 @@
   }
 
   .somma-shell {
+    position: relative;
+    isolation: isolate;
     background:
       radial-gradient(circle at 16% 8%, hsl(var(--somma-pink) / 0.045), transparent 24rem),
       radial-gradient(circle at 78% 18%, hsl(31 92% 50% / 0.085), transparent 26rem),
       linear-gradient(180deg, hsl(40 72% 97%), hsl(36 43% 89%));
+    background-size: 125% 125%, 130% 130%, 100% 100%;
+    animation: somma-background-drift 28s ease-in-out infinite alternate;
+  }
+
+  .somma-loading-state {
+    width: min(100%, 28rem);
+    padding: 1rem 1.1rem;
+    border: 1px solid hsl(33 30% 72% / 0.5);
+    border-radius: 1rem;
+    background: hsl(40 72% 97% / 0.82);
+    box-shadow: 0 14px 38px hsl(25 49% 18% / 0.08);
+    backdrop-filter: blur(12px);
+  }
+
+  .somma-loading-state.is-compact {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.8rem;
+    box-shadow: none;
+  }
+
+  .somma-loading-label {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: hsl(25 24% 32%);
+    font-size: 0.86rem;
+    font-weight: 750;
+  }
+
+  .somma-loading-pulse {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: hsl(var(--somma-pink));
+    box-shadow: 0 0 0 0 hsl(var(--somma-pink) / 0.36);
+    animation: somma-loading-pulse 1.4s ease-out infinite;
+  }
+
+  .somma-loading-track {
+    position: relative;
+    height: 0.32rem;
+    margin-top: 0.72rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: hsl(33 31% 78% / 0.58);
+  }
+
+  .somma-loading-bar {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 42%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, hsl(var(--somma-pink)), hsl(31 93% 51%), hsl(42 91% 59%));
+    box-shadow: 0 0 18px hsl(var(--somma-pink) / 0.3);
+    animation: somma-loading-sweep 1.35s cubic-bezier(.55, 0, .25, 1) infinite;
   }
 
   .somma-panel,
@@ -237,6 +299,15 @@
     transform: translateY(-4px);
     border-color: hsl(var(--somma-pink) / 0.34);
     box-shadow: 0 22px 56px hsl(25 49% 18% / 0.12), 0 0 0 1px hsl(var(--somma-pink) / 0.06);
+  }
+
+  .somma-card-hover svg {
+    transition: transform 220ms ease, filter 220ms ease;
+  }
+
+  .somma-card-hover:hover svg {
+    transform: translateY(-2px) rotate(-3deg) scale(1.06);
+    filter: drop-shadow(0 6px 10px hsl(var(--somma-pink) / 0.18));
   }
 
   .app-page-header {
@@ -417,6 +488,7 @@
     background-image: linear-gradient(hsl(40 70% 92% / 0.045) 1px, transparent 1px), linear-gradient(90deg, hsl(40 70% 92% / 0.035) 1px, transparent 1px);
     background-size: 38px 38px;
     opacity: 0.42;
+    animation: somma-grid-drift 18s linear infinite;
   }
 
   .record-scene {
@@ -851,12 +923,36 @@
   border-radius: 999px;
   color: hsl(40 70% 93% / 0.78);
   background: hsl(40 70% 93% / 0.06);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.landing-platform-pill:hover {
+  transform: translateY(-2px);
+  border-color: hsl(var(--somma-pink) / 0.48);
+  background: hsl(var(--somma-pink) / 0.1);
 }
 
 .landing-platform-pill svg {
   width: 0.85rem;
   height: 0.85rem;
   color: hsl(var(--somma-pink));
+  transition: transform 180ms ease;
+}
+
+.landing-platform-pill:hover svg {
+  transform: rotate(-7deg) scale(1.08);
+}
+
+.landing-platform-row .landing-platform-pill {
+  animation: somma-platform-float 5.5s ease-in-out infinite;
+}
+
+.landing-platform-row .landing-platform-pill:nth-of-type(2) { animation-delay: -1.8s; }
+.landing-platform-row .landing-platform-pill:nth-of-type(3) { animation-delay: -3.6s; }
+
+.homepage-about-copy {
+  color: hsl(40 68% 93% / 0.82) !important;
+  text-shadow: 0 1px 18px hsl(23 45% 8% / 0.24);
 }
 
 .creator-benefit-list {
@@ -874,6 +970,13 @@
   align-items: start;
   padding: 1.5rem;
   background: hsl(39 63% 97% / 0.94);
+  transition: transform 220ms ease, background 220ms ease, box-shadow 220ms ease;
+}
+
+.creator-benefit-item:hover {
+  transform: translateX(-4px);
+  background: hsl(39 72% 98%);
+  box-shadow: 0 16px 38px hsl(25 49% 18% / 0.08);
 }
 
 .creator-benefit-item:first-child {
@@ -1312,6 +1415,69 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes somma-background-drift {
+  from { background-position: 0% 0%, 100% 0%, 0 0; }
+  to { background-position: 7% 5%, 93% 8%, 0 0; }
+}
+
+@keyframes somma-grid-drift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 38px 38px, -38px 38px; }
+}
+
+@keyframes somma-platform-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes somma-loading-sweep {
+  0% { transform: translateX(-115%) scaleX(0.72); }
+  55% { transform: translateX(110%) scaleX(1); }
+  100% { transform: translateX(260%) scaleX(0.78); }
+}
+
+@keyframes somma-loading-pulse {
+  0% { box-shadow: 0 0 0 0 hsl(var(--somma-pink) / 0.34); }
+  75%, 100% { box-shadow: 0 0 0 0.42rem hsl(var(--somma-pink) / 0); }
+}
+
+@supports (animation-timeline: scroll()) {
+  .record-scene {
+    animation: somma-record-parallax linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 72vh;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .landing-platform-row {
+    animation: somma-horizontal-reveal both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 22%;
+  }
+
+  .creator-benefit-item {
+    animation: somma-benefit-slide both;
+    animation-timeline: view();
+    animation-range: entry 4% cover 28%;
+  }
+}
+
+@keyframes somma-record-parallax {
+  from { transform: translate(-50%, -50%); }
+  to { transform: translate(-50%, -44%); }
+}
+
+@keyframes somma-horizontal-reveal {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes somma-benefit-slide {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes reveal-rise {
   from {
     opacity: 0;
@@ -1441,6 +1607,13 @@
   }
 }
 
+@media (max-width: 768px) {
+  body,
+  .somma-shell {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
@@ -1448,5 +1621,10 @@
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
+  }
+
+  .somma-loading-bar {
+    width: 100%;
+    transform: none !important;
   }
 }

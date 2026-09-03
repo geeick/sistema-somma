@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, CheckCircle2, Download, Search, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingState } from '@/components/LoadingState';
 
 interface ErrorLog {
   id: string;
@@ -304,7 +305,7 @@ export default function ErrorsAdmin() {
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
-                      Carregando...
+                      <LoadingState compact className="mx-auto" />
                     </TableCell>
                   </TableRow>
                 ) : errors.length === 0 ? (

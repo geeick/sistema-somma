@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import apiClient from "@/integrations/apiClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/LoadingState";
 import { Instagram, Play, RefreshCw, Youtube, Inbox } from "lucide-react";
 
 interface Video {
@@ -79,7 +80,7 @@ export const VideoList = ({ userId, refreshKey = 0 }: VideoListProps) => {
     return undefined;
   }, [userId, refreshKey]);
 
-  if (isLoading) return <div className="ui-caption font-semibold">Carregando envios...</div>;
+  if (isLoading) return <LoadingState label="Carregando envios..." compact />;
 
   return (
     <div className="space-y-4">

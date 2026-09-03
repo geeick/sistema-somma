@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { DollarSign, TrendingUp, Video } from "lucide-react";
+import { LoadingState } from "@/components/LoadingState";
 
 interface CampaignCost {
   campaign_id: string;
@@ -63,7 +64,7 @@ export const CampaignCostsCard = () => {
           <CardTitle>Campaign Costs</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-muted-foreground">Loading...</div>
+          <LoadingState label="Carregando custos..." compact />
         </CardContent>
       </Card>
     );

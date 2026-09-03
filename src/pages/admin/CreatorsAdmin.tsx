@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingState } from "@/components/LoadingState";
 import {
   AlertTriangle,
   CheckCircle,
@@ -373,9 +374,7 @@ export default function CreatorsAdmin() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Criadores e páginas</h1>
-          <p className="text-muted-foreground">
-            Carregando criadores e páginas...
-          </p>
+          <LoadingState label="Carregando criadores e páginas..." compact className="mt-4" />
         </div>
       </div>
     );

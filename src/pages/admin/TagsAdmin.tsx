@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Plus, Pencil, Trash2, Tag, Users, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { LoadingState } from '@/components/LoadingState';
 
 interface TagType {
   id: string;
@@ -169,8 +170,8 @@ export default function TagsAdmin() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center min-h-[400px] px-6">
+        <LoadingState label="Carregando tags..." />
       </div>
     );
   }
@@ -411,9 +412,7 @@ export default function TagsAdmin() {
           
           <div className="mt-6">
             {isLoadingPages ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
+              <LoadingState label="Carregando páginas desta tag..." compact className="my-8" />
             ) : tagPages && tagPages.length > 0 ? (
               <div className="space-y-4">
                 {tagPages.map((page) => (

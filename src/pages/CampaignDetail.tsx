@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { getNeonSession, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
+import { LoadingState } from "@/components/LoadingState";
 import { UploadVideo } from "@/components/UploadVideo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -187,7 +188,7 @@ const CampaignDetail = () => {
       <div className="min-h-screen somma-shell">
         <Navbar />
         <div className="container mx-auto px-4 pt-28 pb-12">
-          <p className="text-center text-muted-foreground font-semibold">Carregando campanha...</p>
+          <LoadingState label="Carregando campanha..." className="mx-auto" />
         </div>
       </div>
     );
