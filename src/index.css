@@ -842,6 +842,76 @@
   line-height: 1.7;
 }
 
+.landing-platform-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.46rem 0.7rem;
+  border: 1px solid hsl(40 70% 93% / 0.14);
+  border-radius: 999px;
+  color: hsl(40 70% 93% / 0.78);
+  background: hsl(40 70% 93% / 0.06);
+}
+
+.landing-platform-pill svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: hsl(var(--somma-pink));
+}
+
+.creator-benefit-list {
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  padding: clamp(1rem, 3vw, 2rem);
+  background: hsl(33 30% 72% / 0.45);
+}
+
+.creator-benefit-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  padding: 1.5rem;
+  background: hsl(39 63% 97% / 0.94);
+}
+
+.creator-benefit-item:first-child {
+  border-radius: 1.2rem 1.2rem 0 0;
+}
+
+.creator-benefit-item:last-child {
+  border-radius: 0 0 1.2rem 1.2rem;
+}
+
+.creator-benefit-item > span {
+  display: inline-flex;
+  width: 2.65rem;
+  height: 2.65rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  color: hsl(var(--somma-pink));
+  background: hsl(var(--somma-pink) / 0.09);
+}
+
+.creator-benefit-item svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.creator-benefit-item h3 {
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.creator-benefit-item p {
+  margin-top: 0.3rem;
+  color: hsl(25 18% 39%);
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+
 .site-footer {
   position: relative;
   overflow: hidden;
