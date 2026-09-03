@@ -354,7 +354,7 @@ export default function WalletAdmin() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="admin-page-intro flex flex-col md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Carteira & Pagamentos</h1>
           <p className="text-muted-foreground">
@@ -617,4 +617,3 @@ export default function WalletAdmin() {
     </div>
   );
 }
-

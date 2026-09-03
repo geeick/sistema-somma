@@ -56,7 +56,7 @@ export function WalletDisplay({ userId, refreshKey = 0 }: WalletDisplayProps) {
             <CardTitle className="text-[0.95rem] font-bold">Ganhos aprovados</CardTitle>
             <p className="ui-caption mt-1">Total acumulado de envios aprovados ou pagos.</p>
           </div>
-          <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+          <div className="somma-icon-tile h-9 w-9 rounded-xl">
             <TrendingUp className="h-4 w-4" />
           </div>
         </CardHeader>
@@ -71,7 +71,7 @@ export function WalletDisplay({ userId, refreshKey = 0 }: WalletDisplayProps) {
             <CardTitle className="text-[0.95rem] font-bold text-[#f7ead1]">Disponível para saque</CardTitle>
             <p className="text-[0.88rem] leading-relaxed text-[#f7ead1]/65 mt-1">Saques pendentes e pagos já foram descontados.</p>
           </div>
-          <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+          <div className="somma-icon-tile h-9 w-9 rounded-xl">
             <Wallet className="h-4 w-4" />
           </div>
         </CardHeader>

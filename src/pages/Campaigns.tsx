@@ -5,7 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Instagram, Play, Youtube, Calendar, DollarSign, Target, Search } from "lucide-react";
+import { Instagram, Play, Youtube, Calendar, DollarSign, Target, Search, Sparkles } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { normalizeStringList } from "@/lib/normalizeStringList";
 
@@ -77,7 +77,7 @@ const Campaigns = () => {
       <div className="container mx-auto px-4 pt-28 pb-14">
         <div className="max-w-6xl mx-auto space-y-6">
           <header className="app-page-header">
-            <p className="app-eyebrow">Movimentos ativos</p>
+            <p className="app-eyebrow"><Sparkles className="h-4 w-4" /> Movimentos ativos</p>
             <h1 className="app-title">Campanhas</h1>
             <p className="app-subtitle">Descubra oportunidades que combinam com suas páginas e participe dos próximos lançamentos.</p>
           </header>

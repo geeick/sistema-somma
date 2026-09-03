@@ -467,9 +467,18 @@ export default function CampaignEditor() {
         </Link>
       </Button>
 
+      <section className="admin-page-intro">
+        <h1>{titleText}</h1>
+        <p>
+          {isEdit
+            ? "Atualize regras, plataformas, orçamento e materiais da campanha."
+            : "Configure uma nova oportunidade para os criadores da Somma."}
+        </p>
+      </section>
+
       <Card className="bg-gradient-card border-border">
         <CardHeader>
-          <CardTitle>{titleText}</CardTitle>
+          <CardTitle>Detalhes da campanha</CardTitle>
           <CardDescription>
             {isEdit
               ? "Atualize as informações da campanha abaixo."

@@ -6,6 +6,7 @@ import { UploadVideo } from "@/components/UploadVideo";
 import { VideoList } from "@/components/VideoList";
 import { StatsCards } from "@/components/StatsCards";
 import { WalletDisplay } from "@/components/WalletDisplay";
+import { Sparkles } from "lucide-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 pt-28 pb-16">
         <div className="max-w-7xl mx-auto">
           <div className="app-page-header">
-            <p className="app-eyebrow">Painel Somma</p>
+            <p className="app-eyebrow"><Sparkles className="h-4 w-4" /> Painel Somma</p>
             <h1 className="app-title">Painel do criador</h1>
             <p className="app-subtitle">
               Envie conteúdos, acompanhe aprovações e ganhos, e gerencie seus saques em um só lugar.

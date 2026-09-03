@@ -293,7 +293,7 @@ const Auth = () => {
       <div className="container mx-auto px-4 pt-32 pb-16 grid lg:grid-cols-[0.95fr_1.05fr] gap-8 items-center">
         <div className="hidden lg:block somma-dark-panel somma-grain rounded-[2rem] p-10 min-h-[520px] relative overflow-hidden page-enter">
           <div className="relative z-10 max-w-md">
-            <p className="text-primary font-semibold mb-4">Área de acesso Somma</p>
+            <p className="pink-kicker mb-4">Área de acesso Somma</p>
             <h1 className="font-display text-6xl font-black leading-[0.9] text-[#f7ead1] mb-6">
               Entre no movimento.
             </h1>

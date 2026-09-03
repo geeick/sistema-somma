@@ -101,7 +101,7 @@ export default function SettingsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="admin-page-intro">
         <h1 className="text-4xl font-bold mb-2">Configurações</h1>
         <p className="text-muted-foreground">Configurações gerais do sistema</p>
       </div>
