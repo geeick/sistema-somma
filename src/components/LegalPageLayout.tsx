@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { ArrowLeft, FileText, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
-import { SiteFooter } from "@/components/SiteFooter";
 
 export type LegalSection = {
   id: string;
@@ -62,7 +61,6 @@ export function LegalPageLayout({ kind, eyebrow, title, description, sections }:
           </div>
         </div>
       </main>
-      <SiteFooter />
     </div>
   );
 }

@@ -25,6 +25,8 @@ import WalletAdmin from "./pages/admin/WalletAdmin";
 import TagsAdmin from "./pages/admin/TagsAdmin";
 import SettingsAdmin from "./pages/admin/SettingsAdmin";
 import ErrorsAdmin from "./pages/admin/ErrorsAdmin";
+import { ScrollToTop } from "@/components/ScrollToTop";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const queryClient = new QueryClient();
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -100,6 +102,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<AdminRedirect><Index /></AdminRedirect>} />
         <Route path="/auth" element={<AdminRedirect><Auth /></AdminRedirect>} />
@@ -126,6 +129,7 @@ const App = () => (
 
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <SiteFooter />
     </TooltipProvider>
   </QueryClientProvider>
 );

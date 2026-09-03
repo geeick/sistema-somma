@@ -18,8 +18,8 @@ export function SiteFooter() {
             <span className="footer-kicker"><Music2 className="h-4 w-4" /> Somma</span>
             <h2 className="font-display">Música que circula. Criadores que crescem.</h2>
           </div>
-          <Link to="/auth" className="footer-cta-link">
-            Entrar na Somma <ArrowUpRight className="h-4 w-4" />
+          <Link to="/campaigns" className="footer-cta-link">
+            Explorar campanhas <ArrowUpRight className="h-4 w-4" />
           </Link>
         </div>
 

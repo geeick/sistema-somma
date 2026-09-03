@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
-import { SiteFooter } from "@/components/SiteFooter";
 import { ArrowLeft, CheckCircle2, MailCheck, RefreshCw, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 
@@ -475,7 +474,6 @@ const Auth = () => {
           )}
         </Card>
       </div>
-      <SiteFooter />
     </div>
   );
 };
