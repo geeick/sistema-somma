@@ -19,9 +19,9 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen somma-shell">
       <Navbar />
-      <main className="container mx-auto px-4 pt-24 pb-8">
+      <main className="somma-admin container mx-auto px-4 pt-28 pb-14">
         <Outlet />
       </main>
     </div>

@@ -59,7 +59,170 @@ body:has(nav a[href="/wallet"]) .bg-gradient-card {
 body:has(nav a[href="/wallet"]) .somma-panel:hover,
 body:has(nav a[href="/wallet"]) .bg-gradient-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 22px 54px rgba(67, 39, 22, 0.1);
+  border-color: hsl(var(--somma-pink) / 0.25);
+  box-shadow: 0 22px 54px rgba(67, 39, 22, 0.1), 0 0 0 1px hsl(var(--somma-pink) / 0.05);
+}
+
+/* Admin surfaces share the same editorial header and tactile cards as creator pages. */
+.somma-admin {
+  position: relative;
+  isolation: isolate;
+}
+
+.somma-admin::before,
+.somma-admin::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(10px);
+}
+
+.somma-admin::before {
+  width: 19rem;
+  height: 19rem;
+  right: -7rem;
+  top: 11rem;
+  background: hsl(var(--somma-pink) / 0.07);
+}
+
+.somma-admin::after {
+  width: 15rem;
+  height: 15rem;
+  left: -6rem;
+  bottom: 3rem;
+  background: hsl(var(--primary) / 0.08);
+}
+
+.admin-page-intro {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  gap: 1rem;
+  min-height: 10.5rem;
+  padding: 1.75rem 2rem;
+  border-radius: 1.65rem;
+  color: #f9edd9;
+  background:
+    radial-gradient(circle at 85% 20%, hsl(var(--somma-pink) / 0.2), transparent 18rem),
+    linear-gradient(135deg, hsl(27 50% 16%), hsl(22 44% 9%));
+  border: 1px solid rgba(247, 234, 209, 0.14);
+  box-shadow: 0 20px 55px rgba(67, 39, 22, 0.15);
+  animation: somma-app-enter 500ms cubic-bezier(.2,.75,.25,1) both;
+}
+
+.admin-page-intro::before {
+  content: "";
+  position: absolute;
+  right: 2rem;
+  bottom: -5rem;
+  width: 12rem;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: 1.15rem solid hsl(var(--somma-pink) / 0.12);
+  box-shadow: inset 0 0 0 1px hsl(40 70% 92% / 0.12), 0 0 0 1px hsl(40 70% 92% / 0.08);
+  animation: somma-float 7s ease-in-out infinite alternate;
+}
+
+.admin-page-intro > * {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-page-intro h1 {
+  color: #f9edd9;
+  font-size: clamp(2rem, 3.3vw, 3.15rem) !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.05em;
+  margin-bottom: 0.65rem;
+}
+
+.admin-page-intro p {
+  max-width: 48rem;
+  color: rgba(249, 237, 217, 0.76) !important;
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.admin-page-intro button {
+  border-color: hsl(var(--somma-pink) / 0.32);
+  color: #f9edd9;
+  backdrop-filter: blur(10px);
+}
+
+.admin-page-intro button[class*="border-input"] {
+  background: rgba(255, 249, 239, 0.1);
+}
+
+.admin-page-intro button:not([class*="border-input"]) {
+  border-color: transparent;
+  background: linear-gradient(120deg, hsl(var(--somma-pink)), hsl(18 88% 54%));
+  color: white;
+  box-shadow: 0 12px 30px hsl(var(--somma-pink) / 0.22);
+}
+
+.admin-page-intro button:hover {
+  border-color: hsl(var(--somma-pink) / 0.65);
+  background: hsl(var(--somma-pink) / 0.17);
+  color: white;
+}
+
+.somma-admin .bg-card,
+.somma-admin .bg-gradient-card {
+  border-color: rgba(112, 70, 42, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, hsl(var(--somma-pink) / 0.045), transparent 11rem),
+    linear-gradient(145deg, rgba(255, 252, 247, 0.96), rgba(246, 236, 222, 0.91));
+  box-shadow: 0 14px 40px rgba(67, 39, 22, 0.075);
+  animation: somma-card-enter 430ms cubic-bezier(.2,.75,.25,1) both;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.somma-admin .bg-card:hover,
+.somma-admin .bg-gradient-card:hover {
+  border-color: hsl(var(--somma-pink) / 0.24);
+  box-shadow: 0 20px 50px rgba(67, 39, 22, 0.1);
+}
+
+.somma-admin thead tr {
+  border-color: hsl(var(--somma-pink) / 0.12);
+}
+
+.somma-admin tbody tr {
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.somma-admin tbody tr:hover {
+  background: hsl(var(--somma-pink) / 0.035);
+}
+
+.somma-admin [role="tablist"] {
+  border: 1px solid hsl(var(--somma-pink) / 0.1);
+  background: rgba(238, 224, 207, 0.72);
+}
+
+.somma-admin [role="tab"][data-state="active"] {
+  color: hsl(var(--somma-pink-deep));
+  box-shadow: inset 0 -2px 0 hsl(var(--somma-pink));
+}
+
+.somma-admin input,
+.somma-admin textarea,
+.somma-admin [role="combobox"] {
+  border-color: rgba(112, 70, 42, 0.2);
+  background: rgba(255, 252, 247, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.somma-admin input:focus,
+.somma-admin textarea:focus,
+.somma-admin [role="combobox"]:focus-within {
+  border-color: hsl(var(--somma-pink) / 0.55);
+  box-shadow: 0 0 0 4px hsl(var(--somma-pink) / 0.08);
+  background: rgba(255, 253, 249, 0.97);
 }
 
 /* Pages screen: turn the sparse utility header into a deliberate product header. */
@@ -131,10 +294,20 @@ body:has(nav a[href="/wallet"]) .grid > :nth-child(4) { animation-delay: 135ms; 
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes somma-float {
+  from { transform: translate3d(0, 0, 0) rotate(-6deg); }
+  to { transform: translate3d(-0.6rem, -0.8rem, 0) rotate(7deg); }
+}
+
 @media (max-width: 720px) {
   body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
     align-items: flex-start;
     gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .admin-page-intro {
+    align-items: flex-start !important;
     padding: 1.5rem;
   }
 }
@@ -143,6 +316,13 @@ body:has(nav a[href="/wallet"]) .grid > :nth-child(4) { animation-delay: 135ms; 
   body:has(nav a[href="/wallet"]) .somma-panel,
   body:has(nav a[href="/wallet"]) .bg-gradient-card,
   body:has(nav a[href="/wallet"]) .max-w-4xl > .flex.items-center.justify-between:first-child {
+    animation: none !important;
+  }
+
+  .admin-page-intro,
+  .admin-page-intro::before,
+  .somma-admin .bg-card,
+  .somma-admin .bg-gradient-card {
     animation: none !important;
   }
 }

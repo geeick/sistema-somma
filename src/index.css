@@ -36,6 +36,8 @@
     --input: 37 43% 90%;
     --ring: 327 94% 51%;
     --somma-pink: 327 94% 51%;
+    --somma-pink-deep: 329 92% 43%;
+    --somma-pink-soft: 329 86% 94%;
 
     --radius: 1rem;
 
@@ -113,10 +115,61 @@
   }
 
   .somma-nav {
-    background: linear-gradient(90deg, hsl(25 43% 14% / 0.985), hsl(23 40% 10% / 0.97));
+    background:
+      radial-gradient(circle at 14% -120%, hsl(var(--somma-pink) / 0.19), transparent 18rem),
+      linear-gradient(90deg, hsl(25 43% 14% / 0.985), hsl(23 40% 10% / 0.97));
     border-bottom: 1px solid hsl(35 60% 85% / 0.12);
     color: hsl(40 70% 93%);
     box-shadow: 0 12px 38px hsl(22 44% 8% / 0.12);
+  }
+
+  .somma-logo-halo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3rem;
+    height: 2.45rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.9rem;
+    background: hsl(var(--somma-pink) / 0.08);
+    box-shadow: inset 0 0 0 1px hsl(var(--somma-pink) / 0.13), 0 0 24px hsl(var(--somma-pink) / 0.08);
+    transition: transform 220ms ease, background 220ms ease, box-shadow 220ms ease;
+  }
+
+  .somma-logo-link:hover .somma-logo-halo {
+    transform: translateY(-1px) rotate(-2deg);
+    background: hsl(var(--somma-pink) / 0.14);
+    box-shadow: inset 0 0 0 1px hsl(var(--somma-pink) / 0.24), 0 0 30px hsl(var(--somma-pink) / 0.16);
+  }
+
+  .nav-route-link {
+    position: relative;
+    border-radius: 999px;
+  }
+
+  .nav-route-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0.2rem;
+    width: 0.28rem;
+    height: 0.28rem;
+    border-radius: 999px;
+    background: hsl(var(--somma-pink));
+    box-shadow: 0 0 13px hsl(var(--somma-pink) / 0.75);
+    opacity: 0;
+    transform: translate(-50%, 5px) scale(0.4);
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .nav-route-link.is-active {
+    color: white;
+    background: hsl(var(--somma-pink) / 0.1);
+  }
+
+  .nav-route-link.is-active::after {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
   }
 
   .somma-shell {
@@ -128,7 +181,9 @@
 
   .somma-panel,
   .bg-gradient-card {
-    background: linear-gradient(145deg, hsl(40 74% 98%), hsl(36 48% 92%));
+    background:
+      radial-gradient(circle at 100% 0%, hsl(var(--somma-pink) / 0.035), transparent 12rem),
+      linear-gradient(145deg, hsl(40 74% 98%), hsl(36 48% 92%));
     border: 1px solid hsl(31 34% 52% / 0.22);
     box-shadow: var(--shadow-soft);
   }
@@ -180,8 +235,8 @@
 
   .somma-card-hover:hover {
     transform: translateY(-4px);
-    border-color: hsl(var(--somma-pink) / 0.2);
-    box-shadow: 0 22px 56px hsl(25 49% 18% / 0.12);
+    border-color: hsl(var(--somma-pink) / 0.34);
+    box-shadow: 0 22px 56px hsl(25 49% 18% / 0.12), 0 0 0 1px hsl(var(--somma-pink) / 0.06);
   }
 
   .app-page-header {
@@ -196,6 +251,44 @@
     border: 1px solid hsl(35 60% 85% / 0.14);
     box-shadow: 0 20px 56px hsl(25 49% 18% / 0.16);
     animation: page-enter 520ms cubic-bezier(.2,.75,.25,1) both;
+    isolation: isolate;
+  }
+
+  .app-page-header::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    right: clamp(1rem, 6vw, 6rem);
+    top: 50%;
+    width: 11rem;
+    aspect-ratio: 1;
+    border-radius: 999px;
+    transform: translateY(-50%);
+    opacity: 0.82;
+    background:
+      radial-gradient(circle, hsl(var(--somma-pink)) 0 7%, transparent 8% 23%, hsl(40 65% 92% / 0.12) 24% 25%, transparent 26% 38%, hsl(40 65% 92% / 0.1) 39% 40%, transparent 41%),
+      hsl(22 43% 8% / 0.45);
+    box-shadow: 0 18px 45px hsl(22 55% 6% / 0.28);
+    animation: header-record-spin 28s linear infinite;
+  }
+
+  .app-page-header::after {
+    content: "";
+    position: absolute;
+    z-index: -2;
+    right: -4rem;
+    top: -6rem;
+    width: 20rem;
+    height: 20rem;
+    border-radius: 40% 60% 58% 42%;
+    background: linear-gradient(135deg, hsl(var(--somma-pink) / 0.24), hsl(32 93% 49% / 0.03));
+    filter: blur(1px);
+    animation: header-blob 9s ease-in-out infinite alternate;
+  }
+
+  .app-page-header > * {
+    position: relative;
+    z-index: 1;
   }
 
   .app-eyebrow {
@@ -203,7 +296,7 @@
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.6rem;
-    color: hsl(32 93% 56%);
+    color: hsl(330 96% 72%);
     font-size: 0.82rem;
     font-weight: 800;
     letter-spacing: 0.08em;
@@ -232,6 +325,46 @@
     font-weight: 800;
     letter-spacing: -0.045em;
     line-height: 1;
+  }
+
+  .somma-icon-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid hsl(var(--somma-pink) / 0.14);
+    background: linear-gradient(145deg, hsl(var(--somma-pink-soft)), hsl(33 96% 91%));
+    color: hsl(var(--somma-pink-deep));
+    box-shadow: 0 10px 24px hsl(var(--somma-pink) / 0.1);
+  }
+
+  .somma-panel .bg-primary\/10,
+  .somma-panel .bg-primary\/15,
+  .bg-gradient-card .bg-primary\/10,
+  .bg-gradient-card .bg-primary\/15 {
+    border: 1px solid hsl(var(--somma-pink) / 0.14);
+    background: linear-gradient(145deg, hsl(var(--somma-pink-soft)), hsl(33 96% 91%));
+    color: hsl(var(--somma-pink-deep));
+    box-shadow: 0 9px 22px hsl(var(--somma-pink) / 0.09);
+  }
+
+  [role="dialog"] {
+    border-color: hsl(var(--somma-pink) / 0.18);
+    background:
+      radial-gradient(circle at 100% 0%, hsl(var(--somma-pink) / 0.075), transparent 15rem),
+      linear-gradient(145deg, hsl(40 74% 98%), hsl(36 48% 93%));
+    box-shadow: 0 30px 90px hsl(24 48% 12% / 0.28), 0 0 0 1px hsl(var(--somma-pink) / 0.05);
+    animation: dialog-pop 260ms cubic-bezier(.2,.8,.25,1) both;
+  }
+
+  .pink-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: hsl(var(--somma-pink-deep));
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .ui-caption {
@@ -462,6 +595,21 @@
   }
 }
 
+@keyframes header-record-spin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+
+@keyframes header-blob {
+  from { transform: translate3d(0, 0, 0) rotate(-8deg); }
+  to { transform: translate3d(-1.4rem, 1rem, 0) rotate(8deg); }
+}
+
+@keyframes dialog-pop {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 @media (max-width: 1023px) {
   .hero-art-card {
     min-height: 420px;
@@ -469,6 +617,18 @@
 
   .record-scene {
     width: min(82vw, 390px);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-page-header::before {
+    right: -2.5rem;
+    width: 9rem;
+    opacity: 0.42;
+  }
+
+  .app-page-header {
+    padding: 1.6rem;
   }
 }
 

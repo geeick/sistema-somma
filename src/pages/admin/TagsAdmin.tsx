@@ -177,7 +177,7 @@ export default function TagsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="admin-page-intro flex flex-col md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-4xl font-bold mb-2">Gerenciador de Tags</h1>
           <p className="text-muted-foreground">Gerenciar tags, categorias e taxonomia</p>

@@ -420,7 +420,7 @@ export default function CreatorsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="admin-page-intro">
         <h1 className="text-3xl font-bold">Criadores e páginas</h1>
         <p className="text-muted-foreground">
           Gerencie criadores, páginas e verificações.

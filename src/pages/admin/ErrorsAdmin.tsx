@@ -195,7 +195,7 @@ export default function ErrorsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="admin-page-intro">
         <h1 className="text-4xl font-bold mb-2">Monitoramento de erros</h1>
         <p className="text-muted-foreground">Monitore e gerencie os erros da aplicação</p>
       </div>

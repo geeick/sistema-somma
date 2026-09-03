@@ -482,7 +482,7 @@ const PagesPro = () => {
 
           {normalizedPages.length === 0 ? (
             <div className="empty-state page-enter stagger-1 min-h-[300px]">
-              <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+              <div className="somma-icon-tile h-14 w-14 rounded-2xl">
                 <UsersRound className="h-6 w-6" />
               </div>
               <h2 className="text-xl font-extrabold">
@@ -514,7 +514,7 @@ const PagesPro = () => {
                     <CardHeader>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          <div className="somma-icon-tile h-11 w-11 rounded-xl shrink-0">
                             <Icon className="h-5 w-5" />
                           </div>
                           <div className="min-w-0">

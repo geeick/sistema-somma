@@ -312,7 +312,7 @@ export default function CampaignsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="admin-page-intro flex flex-col justify-between md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-bold">Gerenciamento de Campanhas</h1>
           <p className="text-muted-foreground">Crie e gerencie suas campanhas</p>
@@ -345,7 +345,7 @@ export default function CampaignsAdmin() {
             const status = campaign.status || 'unknown';
 
             return (
-              <Card key={campaign.id}>
+              <Card key={campaign.id} className="somma-card-hover overflow-hidden">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">

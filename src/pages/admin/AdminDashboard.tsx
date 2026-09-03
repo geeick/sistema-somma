@@ -39,7 +39,7 @@ function StatCard({ title, value, description, icon: Icon }: { title: string; va
           <CardTitle className="text-[0.94rem] font-extrabold">{title}</CardTitle>
           <CardDescription className="ui-caption mt-1">{description}</CardDescription>
         </div>
-        <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+        <div className="somma-icon-tile h-9 w-9 rounded-xl">
           <Icon className="h-4 w-4" />
         </div>
       </CardHeader>
