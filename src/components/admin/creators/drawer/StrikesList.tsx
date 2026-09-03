@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingState } from '@/components/LoadingState';
 
 interface Strike {
   id: string;
@@ -79,7 +80,7 @@ export function StrikesList({ userId }: { userId: string }) {
     }
   };
 
-  if (loading) return <div className="text-center py-4">Loading...</div>;
+  if (loading) return <LoadingState label="Carregando registros..." compact />;
   if (strikes.length === 0) return <div className="text-center py-4 text-muted-foreground">No strikes</div>;
 
   return (

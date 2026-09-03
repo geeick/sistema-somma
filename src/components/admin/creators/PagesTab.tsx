@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Search, CheckCircle, XCircle, Trash2, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { LoadingState } from '@/components/LoadingState';
 
 interface Page {
   id: string;
@@ -183,7 +184,7 @@ export function PagesTab() {
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8">
-                    Loading...
+                    <LoadingState label="Carregando páginas..." compact className="mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : pages.length === 0 ? (

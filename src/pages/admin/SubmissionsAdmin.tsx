@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { LoadingState } from "@/components/LoadingState";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -459,8 +460,8 @@ export default function SubmissionsAdmin() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center min-h-[400px] px-6">
+        <LoadingState label="Carregando submissões..." />
       </div>
     );
   }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getNeonSession, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
+import { LoadingState } from "@/components/LoadingState";
 import { UploadVideo } from "@/components/UploadVideo";
 import { VideoList } from "@/components/VideoList";
 import { StatsCards } from "@/components/StatsCards";
@@ -34,7 +35,7 @@ const Dashboard = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen somma-shell flex items-center justify-center">
-        <div className="text-base font-semibold text-muted-foreground">Carregando painel...</div>
+        <LoadingState label="Carregando painel..." />
       </div>
     );
   }

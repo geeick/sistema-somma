@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { getNeonAccessToken, getNeonUser, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
+import { LoadingState } from "@/components/LoadingState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -657,7 +658,7 @@ const Pages = () => {
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         <Navbar />
         <div className="container mx-auto px-4 pt-24 pb-12">
-          <p className="text-center text-muted-foreground">Loading pages...</p>
+          <LoadingState label="Carregando páginas..." className="mx-auto" />
         </div>
       </div>
     );
@@ -1028,6 +1029,5 @@ const Pages = () => {
 };
 
 export default Pages;
-
 
 

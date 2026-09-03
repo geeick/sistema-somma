@@ -12,6 +12,7 @@ import { ExternalLink, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { normalizeStringList } from "@/lib/normalizeStringList";
+import { LoadingState } from "@/components/LoadingState";
 
 interface UploadVideoProps {
   userId?: string;
@@ -558,6 +559,13 @@ export const UploadVideo = ({
                   )}
                 </SelectContent>
               </Select>
+
+              {isLoadingContent && (
+                <LoadingState
+                  label={`Carregando conteúdo do ${normalizePlatform(platform)}...`}
+                  compact
+                />
+              )}
 
               {selectedContent && (
                 <Card className="bg-muted/40">

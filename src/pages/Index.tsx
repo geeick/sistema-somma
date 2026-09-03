@@ -13,6 +13,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { LoadingState } from "@/components/LoadingState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getNeonUser, type NeonUser } from "@/lib/auth";
@@ -74,7 +75,13 @@ const Index = () => {
       });
   }, []);
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen somma-shell flex items-center justify-center px-6">
+        <LoadingState label="Carregando a Somma..." className="w-full max-w-sm" />
+      </div>
+    );
+  }
   if (user) return <Navigate to="/dashboard" replace />;
 
   return (
@@ -108,7 +115,7 @@ const Index = () => {
                   </Button>
                 </div>
 
-                <div className="mt-10 flex flex-wrap items-center gap-2 text-xs font-bold text-[#f7ead1]/62">
+                <div className="landing-platform-row mt-10 flex flex-wrap items-center gap-2 text-xs font-bold text-[#f7ead1]/62">
                   <span className="mr-1">Conecte:</span>
                   <span className="landing-platform-pill"><Instagram /> Instagram</span>
                   <span className="landing-platform-pill"><Play /> TikTok</span>
@@ -209,7 +216,7 @@ const Index = () => {
                 <h2 className="font-display mt-3 text-4xl md:text-5xl font-black text-[#f7ead1] leading-[0.98]">
                   Uma operação mais clara para quem lança e para quem cria.
                 </h2>
-                <p className="mt-5 text-[#f7ead1]/72 text-base md:text-lg leading-relaxed">
+                <p className="homepage-about-copy mt-5 text-base md:text-lg leading-relaxed">
                   Artistas, equipes e marcas organizam briefing, plataformas, regras e orçamento. Criadores encontram oportunidades, enviam conteúdo e acompanham resultados — tudo dentro da mesma campanha.
                 </p>
               </div>

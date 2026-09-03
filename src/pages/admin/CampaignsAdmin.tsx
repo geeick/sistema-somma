@@ -6,6 +6,7 @@ import { Plus, Edit, Trash2, Copy, RefreshCw, AlertTriangle } from 'lucide-react
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { getNeonAccessToken } from '@/lib/auth';
+import { LoadingState } from '@/components/LoadingState';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -287,7 +288,7 @@ export default function CampaignsAdmin() {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center py-8">Carregando campanhas...</div>;
+    return <LoadingState label="Carregando campanhas..." className="mx-auto my-8" />;
   }
 
   if (error) {

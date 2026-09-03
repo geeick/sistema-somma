@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingState } from "@/components/LoadingState";
 import {
   AlertTriangle,
   CheckCircle,
@@ -309,7 +310,7 @@ export default function WalletAdmin() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Carteira & Pagamentos</h1>
-          <p className="text-muted-foreground">Carregando dados da carteira...</p>
+          <LoadingState label="Carregando dados da carteira..." compact className="mt-4" />
         </div>
       </div>
     );

@@ -8,6 +8,7 @@ import { Search, Download, UserPlus, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CreatorProfileDrawer } from './CreatorProfileDrawer';
 import { AddStrikeDialog } from './AddStrikeDialog';
+import { LoadingState } from '@/components/LoadingState';
 
 interface Creator {
   id: string;
@@ -176,7 +177,7 @@ export function CreatorsTab() {
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8">
-                    Loading...
+                    <LoadingState label="Carregando criadores..." compact className="mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : creators.length === 0 ? (

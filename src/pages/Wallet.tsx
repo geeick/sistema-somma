@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "@/integrations/apiClient";
 import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
+import { LoadingState } from "@/components/LoadingState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -148,7 +149,7 @@ const Wallet = () => {
       <div className="min-h-screen somma-shell">
         <Navbar />
         <div className="container mx-auto px-4 pt-28 pb-12">
-          <p className="text-center text-muted-foreground font-semibold">Carregando carteira...</p>
+          <LoadingState label="Carregando carteira..." className="mx-auto" />
         </div>
       </div>
     );

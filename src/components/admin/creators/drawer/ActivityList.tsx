@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingState } from '@/components/LoadingState';
 
 interface Submission {
   id: string;
@@ -54,7 +55,7 @@ export function ActivityList({ userId }: { userId: string }) {
     }
   };
 
-  if (loading) return <div className="text-center py-4">Loading...</div>;
+  if (loading) return <LoadingState label="Carregando envios..." compact />;
   if (submissions.length === 0) return <div className="text-center py-4 text-muted-foreground">No submissions</div>;
 
   return (

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingState } from '@/components/LoadingState';
 
 interface Page {
   id: string;
@@ -73,7 +74,7 @@ export function PagesList({ userId }: { userId: string }) {
     }
   };
 
-  if (loading) return <div className="text-center py-4">Loading...</div>;
+  if (loading) return <LoadingState label="Carregando páginas..." compact />;
   if (pages.length === 0) return <div className="text-center py-4 text-muted-foreground">No pages</div>;
 
   return (
