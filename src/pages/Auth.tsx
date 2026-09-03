@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { authClient, getNeonAccessToken, getNeonUser } from "@/lib/auth";
 import apiClient from "@/integrations/apiClient";
 import { setAccessToken } from "@/integrations/auth";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
+import { SiteFooter } from "@/components/SiteFooter";
 import { ArrowLeft, CheckCircle2, MailCheck, RefreshCw, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 
@@ -466,11 +467,15 @@ const Auth = () => {
                     </form>
                   </TabsContent>
                 </Tabs>
+                <p className="mt-5 text-center text-xs leading-relaxed text-muted-foreground">
+                  Ao criar uma conta, você concorda com os <Link to="/terms" className="font-bold text-[hsl(var(--somma-pink-deep))] hover:underline">Termos de Serviço</Link> e reconhece a nossa <Link to="/privacy" className="font-bold text-[hsl(var(--somma-pink-deep))] hover:underline">Política de Privacidade</Link>.
+                </p>
               </CardContent>
             </>
           )}
         </Card>
       </div>
+      <SiteFooter />
     </div>
   );
 };
