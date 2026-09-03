@@ -2,10 +2,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
 import { Link, Navigate } from "react-router-dom";
-import { CheckCircle, Music2, Sparkles, TrendingUp, Users, Wallet } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  BarChart3,
+  CalendarDays,
+  CheckCircle,
+  CircleDollarSign,
+  Instagram,
+  Megaphone,
+  Music2,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  Tags,
+  TrendingUp,
+  Users,
+  Wallet,
+  Youtube,
+} from "lucide-react";
 import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { useEffect, useState } from "react";
-import { SiteFooter } from "@/components/SiteFooter";
 
 const participatingArtists = [
   "Alok",
@@ -50,19 +67,24 @@ const Index = () => {
 
   const features = [
     {
-      icon: Music2,
-      title: "Transforme música em movimento",
-      description: "Campanhas criadas para músicas brasileiras chegarem em novas comunidades.",
+      icon: ShieldCheck,
+      title: "Conecte sua página",
+      description: "Autorize Instagram, TikTok ou YouTube para confirmar que a conta e o conteúdo são seus.",
     },
     {
-      icon: Users,
-      title: "Criadores entram na cultura",
-      description: "TikTok, Instagram e Shorts reunidos em uma experiência simples para criadores.",
+      icon: Megaphone,
+      title: "Encontre campanhas",
+      description: "Veja briefing, prazo, orçamento, plataformas e requisitos antes de decidir participar.",
+    },
+    {
+      icon: Music2,
+      title: "Publique e envie",
+      description: "Escolha uma publicação da conta conectada e envie diretamente para a campanha correta.",
     },
     {
       icon: Wallet,
-      title: "Ganhe pelo impacto",
-      description: "Acompanhe envios, aprovações, métricas e pagamentos em um só painel.",
+      title: "Acompanhe e receba",
+      description: "Consulte aprovação, métricas sincronizadas, valor liberado e histórico de saques.",
     },
   ];
 
@@ -147,6 +169,24 @@ const Index = () => {
           </div>
         </section>
 
+        <section className="container mx-auto px-4 pt-8" aria-label="Recursos principais">
+          <div className="homepage-proof-grid">
+            {[
+              { icon: BadgeCheck, title: "Contas verificadas", description: "Login feito pela própria plataforma social" },
+              { icon: BarChart3, title: "Métricas sincronizadas", description: "Dados do conteúdo conectado, sem digitação manual" },
+              { icon: CircleDollarSign, title: "Pagamentos rastreáveis", description: "Aprovação, saldo e solicitações reunidos na carteira" },
+            ].map(({ icon: Icon, title, description }) => (
+              <div key={title} className="homepage-proof-item">
+                <span><Icon className="h-5 w-5" /></span>
+                <div>
+                  <strong>{title}</strong>
+                  <p>{description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section id="como-funciona" className="container mx-auto px-4 py-16">
           <div className="text-center max-w-3xl mx-auto mb-10 reveal-on-scroll">
             <h2 className="font-display text-4xl md:text-5xl font-black mb-4">Como funciona</h2>
@@ -155,7 +195,7 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
             {features.map((feature, index) => (
               <Card key={feature.title} className="somma-panel somma-card-hover rounded-[1.5rem] reveal-on-scroll">
                 <CardHeader>
@@ -176,10 +216,80 @@ const Index = () => {
           </div>
         </section>
 
+        <section className="container mx-auto px-4 pb-16">
+          <div className="homepage-campaign-info somma-panel reveal-on-scroll">
+            <div className="homepage-section-copy">
+              <p className="pink-kicker">Decida com todas as informações</p>
+              <h2 className="font-display">Você sabe exatamente o que a campanha pede.</h2>
+              <p>
+                Cada oportunidade reúne os detalhes necessários para criar, publicar e receber sem depender de mensagens espalhadas.
+              </p>
+
+              <div className="homepage-check-list">
+                {[
+                  "Briefing criativo e regras da campanha",
+                  "Prazo, orçamento e limite por criador",
+                  "Plataformas aceitas e tags obrigatórias",
+                  "Status do envio e critérios de pagamento",
+                ].map((item) => (
+                  <div key={item}><CheckCircle /> <span>{item}</span></div>
+                ))}
+              </div>
+            </div>
+
+            <div className="campaign-information-card" aria-label="Exemplo das informações de uma campanha">
+              <div className="campaign-information-topline">
+                <span>Campanha musical</span>
+                <strong>Inscrições abertas</strong>
+              </div>
+              <h3>Briefing completo antes de participar</h3>
+              <p>Veja requisitos e confirme se a oportunidade combina com seu conteúdo.</p>
+              <div className="campaign-information-grid">
+                <div><CalendarDays /><span>Prazo</span><strong>Data definida</strong></div>
+                <div><Users /><span>Limite</span><strong>Por criador</strong></div>
+                <div><Tags /><span>Tags</span><strong>Obrigatórias</strong></div>
+                <div><CircleDollarSign /><span>Pagamento</span><strong>Regras visíveis</strong></div>
+              </div>
+              <Link to="/auth" className="campaign-information-link">
+                Ver campanhas disponíveis <ArrowRight />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="container mx-auto px-4 pb-16">
+          <div className="text-center max-w-3xl mx-auto mb-10 reveal-on-scroll">
+            <p className="pink-kicker justify-center">Uma conexão, menos trabalho manual</p>
+            <h2 className="font-display text-4xl md:text-5xl font-black mb-4">Suas contas sociais trabalham juntas</h2>
+            <p className="font-ui text-base md:text-lg text-muted-foreground">
+              A Somma usa as autorizações oficiais das plataformas para identificar sua conta, carregar suas próprias publicações e sincronizar métricas elegíveis.
+            </p>
+          </div>
+
+          <div className="homepage-platform-grid">
+            {[
+              { icon: Instagram, name: "Instagram", description: "Conecte o perfil autorizado, selecione suas publicações e acompanhe curtidas e comentários." },
+              { icon: Play, name: "TikTok", description: "Confirme o criador pelo Login Kit e carregue vídeos e métricas permitidos pela conta." },
+              { icon: Youtube, name: "YouTube Shorts", description: "Conecte o canal do Google, escolha seus Shorts e sincronize dados do vídeo." },
+            ].map(({ icon: Icon, name, description }) => (
+              <Card key={name} className="homepage-platform-card somma-card-hover reveal-on-scroll">
+                <CardHeader>
+                  <div className="homepage-platform-icon"><Icon /></div>
+                  <CardTitle className="font-display text-3xl">{name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground leading-relaxed">{description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
         <section id="criadores" className="container mx-auto px-4 pb-16">
           <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-7 items-stretch">
             <Card className="somma-dark-panel somma-grain rounded-[2rem] p-2 reveal-on-scroll">
               <CardHeader>
+                <p className="pink-kicker">Exemplo da experiência</p>
                 <CardTitle className="font-display text-3xl md:text-4xl text-[#f7ead1]">Painel do criador</CardTitle>
                 <CardDescription className="font-ui text-[#f7ead1]/75">
                   Tudo que um criador precisa para participar de campanhas e sacar pagamentos.
@@ -230,6 +340,57 @@ const Index = () => {
           </div>
         </section>
 
+        <section className="container mx-auto px-4 pb-16">
+          <div className="grid lg:grid-cols-2 gap-6">
+            <Card className="somma-panel rounded-[2rem] homepage-audience-card reveal-on-scroll">
+              <CardHeader>
+                <div className="homepage-platform-icon"><Users /></div>
+                <p className="pink-kicker">Para criadores</p>
+                <CardTitle className="font-display text-3xl md:text-4xl">Oportunidades organizadas em um só lugar</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-muted-foreground">
+                <p>Descubra campanhas compatíveis com seus temas e páginas aprovadas.</p>
+                <p>Envie conteúdo da conta conectada, acompanhe a análise e saiba quando o pagamento estiver disponível.</p>
+              </CardContent>
+            </Card>
+
+            <Card className="somma-dark-panel somma-grain rounded-[2rem] homepage-audience-card reveal-on-scroll">
+              <CardHeader>
+                <div className="homepage-platform-icon is-dark"><TrendingUp /></div>
+                <p className="pink-kicker">Para artistas, equipes e marcas</p>
+                <CardTitle className="font-display text-3xl md:text-4xl text-[#f7ead1]">Campanhas com operação e resultados visíveis</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-[#f7ead1]/72">
+                <p>Defina briefing, critérios, plataformas, tags, orçamento e período da campanha.</p>
+                <p>Revise participações, sincronize métricas autorizadas e acompanhe pagamentos sem perder o histórico.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        <section className="container mx-auto px-4 pb-16">
+          <div className="homepage-faq somma-panel reveal-on-scroll">
+            <div>
+              <p className="pink-kicker">Dúvidas frequentes</p>
+              <h2 className="font-display">Antes de entrar no movimento</h2>
+              <p>Respostas diretas sobre contas, campanhas e pagamentos.</p>
+            </div>
+            <div className="homepage-faq-list">
+              {[
+                ["Preciso informar minha senha das redes sociais?", "Não. A autorização acontece na própria plataforma social, e a Somma recebe apenas as permissões que você aprovar."],
+                ["Qualquer publicação pode ser enviada?", "A publicação deve vir de uma página conectada e atender às plataformas, tags, datas e demais regras da campanha."],
+                ["Como as métricas são conferidas?", "Quando a integração permite, a Somma sincroniza os dados diretamente da conta autorizada. A equipe também pode revisar o envio antes da aprovação."],
+                ["Quando o valor aparece na carteira?", "Depois que o envio e as métricas forem aprovados conforme as regras da campanha. A carteira mostra saldo, solicitações pendentes e pagamentos concluídos."],
+              ].map(([question, answer]) => (
+                <details key={question}>
+                  <summary>{question}<span>+</span></summary>
+                  <p>{answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section id="sobre" className="container mx-auto px-4">
           <Card className="somma-panel somma-card-hover rounded-[2rem] text-center reveal-on-scroll">
             <CardHeader className="space-y-4 pt-12">
@@ -250,7 +411,6 @@ const Index = () => {
         </section>
       </main>
 
-      <SiteFooter />
     </div>
   );
 };
