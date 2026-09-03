@@ -13,6 +13,8 @@ import CampaignDetail from "./pages/CampaignDetail";
 import Pages from "./pages/PagesPro";
 import Wallet from "./pages/Wallet";
 import NotFound from "./pages/NotFound";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import CampaignsAdmin from "./pages/admin/CampaignsAdmin";
@@ -101,6 +103,8 @@ const App = () => (
       <Routes>
         <Route path="/" element={<AdminRedirect><Index /></AdminRedirect>} />
         <Route path="/auth" element={<AdminRedirect><Auth /></AdminRedirect>} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/dashboard" element={<AdminRedirect requireAuth><Dashboard /></AdminRedirect>} />
         <Route path="/campaigns" element={<AdminRedirect requireAuth><Campaigns /></AdminRedirect>} />
         <Route path="/campaigns/:id" element={<AdminRedirect requireAuth><CampaignDetail /></AdminRedirect>} />

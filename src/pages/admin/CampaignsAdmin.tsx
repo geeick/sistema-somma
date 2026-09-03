@@ -345,10 +345,10 @@ export default function CampaignsAdmin() {
             const status = campaign.status || 'unknown';
 
             return (
-              <Card key={campaign.id} className="somma-card-hover overflow-hidden">
+              <Card key={campaign.id} className="somma-card-hover overflow-visible">
                 <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-1">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+                    <div className="space-y-1 min-w-0">
                       <CardTitle className="flex items-center gap-2 flex-wrap">
                         {campaign.title}
                         {campaign.code && (
@@ -381,7 +381,7 @@ export default function CampaignsAdmin() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0 self-end sm:self-start p-0.5">
                       <Button
                         variant="outline"
                         size="icon"

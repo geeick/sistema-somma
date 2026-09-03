@@ -5,6 +5,7 @@ import { Link, Navigate } from "react-router-dom";
 import { CheckCircle, Music2, Sparkles, TrendingUp, Users, Wallet } from "lucide-react";
 import { getNeonUser, type NeonUser } from "@/lib/auth";
 import { useEffect, useState } from "react";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const participatingArtists = [
   "Alok",
@@ -90,10 +91,10 @@ const Index = () => {
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Button size="lg" asChild className="rounded-full bg-primary px-7 text-primary-foreground hover:bg-accent shadow-glow font-ui font-bold transition-transform duration-300 hover:-translate-y-0.5">
+                  <Button size="lg" asChild className="rounded-full bg-primary px-7 text-primary-foreground hover:bg-accent shadow-glow font-ui font-bold transition-all duration-300">
                     <Link to="/auth">Começar um movimento</Link>
                   </Button>
-                  <Button size="lg" variant="outline" asChild className="rounded-full border-[#f7ead1]/35 bg-transparent px-7 text-[#f7ead1] hover:border-[hsl(var(--somma-pink))]/70 hover:bg-[hsl(var(--somma-pink))]/12 hover:text-[#f7ead1] font-ui font-bold transition-transform duration-300 hover:-translate-y-0.5">
+                  <Button size="lg" variant="outline" asChild className="rounded-full border-[#f7ead1]/35 bg-transparent px-7 text-[#f7ead1] hover:border-[hsl(var(--somma-pink))]/70 hover:bg-[hsl(var(--somma-pink))]/12 hover:text-[#f7ead1] font-ui font-bold transition-all duration-300">
                     <Link to="/auth">Explorar campanhas →</Link>
                   </Button>
                 </div>
@@ -249,9 +250,7 @@ const Index = () => {
         </section>
       </main>
 
-      <footer className="border-t border-border/60 py-8 text-center text-muted-foreground font-ui">
-        <p>&copy; 2026 Somma. Todos os direitos reservados.</p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 };
