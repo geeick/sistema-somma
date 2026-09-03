@@ -18,7 +18,6 @@ export function LoadingState({
       aria-live="polite"
     >
       <div className="somma-loading-label">
-        <span className="somma-loading-pulse" aria-hidden="true" />
         <span>{label}</span>
       </div>
       <div className="somma-loading-track" aria-hidden="true">

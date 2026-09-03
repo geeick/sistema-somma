@@ -28,11 +28,21 @@ import ErrorsAdmin from "./pages/admin/ErrorsAdmin";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { LoadingState } from "@/components/LoadingState";
 import { SiteFooter } from "@/components/SiteFooter";
+import { preloadCreatorData } from "@/integrations/apiClient";
 
 const queryClient = new QueryClient();
 const API_BASE = import.meta.env.VITE_API_BASE || "";
+const ADMIN_CACHE_TTL = 60_000;
+let cachedAdminStatus: { userId: string; value: boolean; expiresAt: number } | null = null;
 
-async function currentUserIsAdmin() {
+async function currentUserIsAdmin(userId: string) {
+  if (
+    cachedAdminStatus?.userId === userId &&
+    cachedAdminStatus.expiresAt > Date.now()
+  ) {
+    return cachedAdminStatus.value;
+  }
+
   const token = await getNeonAccessToken();
   if (!token) return false;
 
@@ -43,7 +53,9 @@ async function currentUserIsAdmin() {
     });
     if (!response.ok) return false;
     const json = await response.json().catch(() => null);
-    return Boolean(json?.data?.isAdmin);
+    const value = Boolean(json?.data?.isAdmin);
+    cachedAdminStatus = { userId, value, expiresAt: Date.now() + ADMIN_CACHE_TTL };
+    return value;
   } catch (error) {
     console.error("Admin redirect check failed", error);
     return false;
@@ -71,7 +83,8 @@ function AdminRedirect({ children, requireAuth = false }: { children: ReactNode;
           return;
         }
 
-        const isAdmin = await currentUserIsAdmin();
+        window.setTimeout(() => void preloadCreatorData(user.id), 250);
+        const isAdmin = await currentUserIsAdmin(user.id);
         if (isAdmin && !location.pathname.startsWith("/admin")) {
           navigate("/admin", { replace: true });
           return;

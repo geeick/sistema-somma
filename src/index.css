@@ -186,59 +186,52 @@
   }
 
   .somma-loading-state {
-    width: min(100%, 28rem);
-    padding: 1rem 1.1rem;
-    border: 1px solid hsl(33 30% 72% / 0.5);
-    border-radius: 1rem;
-    background: hsl(40 72% 97% / 0.82);
-    box-shadow: 0 14px 38px hsl(25 49% 18% / 0.08);
-    backdrop-filter: blur(12px);
+    position: fixed;
+    z-index: 100;
+    inset: 0 0 auto;
+    width: 100%;
+    padding: 0;
+    pointer-events: none;
+    animation: somma-loading-appear 160ms ease 300ms both;
   }
 
   .somma-loading-state.is-compact {
+    position: relative;
+    z-index: auto;
+    inset: auto;
     width: 100%;
-    padding: 0.75rem;
-    border-radius: 0.8rem;
-    box-shadow: none;
+    padding: 0.25rem 0;
   }
 
   .somma-loading-label {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    color: hsl(25 24% 32%);
-    font-size: 0.86rem;
-    font-weight: 750;
-  }
-
-  .somma-loading-pulse {
-    width: 0.5rem;
-    height: 0.5rem;
-    flex: 0 0 auto;
-    border-radius: 999px;
-    background: hsl(var(--somma-pink));
-    box-shadow: 0 0 0 0 hsl(var(--somma-pink) / 0.36);
-    animation: somma-loading-pulse 1.4s ease-out infinite;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .somma-loading-track {
     position: relative;
-    height: 0.32rem;
-    margin-top: 0.72rem;
+    height: 0.18rem;
+    margin-top: 0;
     overflow: hidden;
     border-radius: 999px;
-    background: hsl(33 31% 78% / 0.58);
+    background: hsl(33 31% 78% / 0.42);
   }
 
   .somma-loading-bar {
     position: absolute;
     inset-block: 0;
     left: 0;
-    width: 42%;
+    width: 34%;
     border-radius: inherit;
     background: linear-gradient(90deg, hsl(var(--somma-pink)), hsl(31 93% 51%), hsl(42 91% 59%));
-    box-shadow: 0 0 18px hsl(var(--somma-pink) / 0.3);
-    animation: somma-loading-sweep 1.35s cubic-bezier(.55, 0, .25, 1) infinite;
+    animation: somma-loading-sweep 1.6s cubic-bezier(.55, 0, .25, 1) infinite;
   }
 
   .somma-panel,
@@ -1436,9 +1429,9 @@
   100% { transform: translateX(260%) scaleX(0.78); }
 }
 
-@keyframes somma-loading-pulse {
-  0% { box-shadow: 0 0 0 0 hsl(var(--somma-pink) / 0.34); }
-  75%, 100% { box-shadow: 0 0 0 0.42rem hsl(var(--somma-pink) / 0); }
+@keyframes somma-loading-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @supports (animation-timeline: scroll()) {
