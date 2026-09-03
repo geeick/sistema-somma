@@ -15,8 +15,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 const publicNavLinks = [
   { label: "Descobrir", href: "/#descobrir" },
   { label: "Como funciona", href: "/#como-funciona" },
-  { label: "Criadores", href: "/#criadores" },
-  { label: "Sobre", href: "/#sobre" },
+  { label: "Para criadores", href: "/#criadores" },
+  { label: "Sobre a Somma", href: "/#sobre" },
 ];
 
 const adminNavLinks = [
